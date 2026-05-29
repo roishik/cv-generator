@@ -130,12 +130,34 @@ const adapterSchema: any = {
   verificationTokensTable: verificationTokens,
 };
 
+// ─── Session strategy resolution ─────────────────────────────────────────────
+// Auth.js v5 constraint: Credentials-only + database sessions is not supported.
+// When no OAuth provider is configured (Google creds absent) and the dev-login
+// Credentials shim is the only provider, we fall back to JWT sessions.
+//
+// This only applies in dev/test (Google creds are REQUIRED in production via
+// the env validation in lib/env.ts, so production always has an OAuth provider
+// and always uses database sessions for server-side revocation).
+function resolveSessionStrategy(): "database" | "jwt" {
+  const hasOAuth = !!(process.env["GOOGLE_CLIENT_ID"] && process.env["GOOGLE_CLIENT_SECRET"]);
+  const onlyCredentials = !hasOAuth && isDevLoginEnabled();
+  // Auth.js v5: Credentials-only requires JWT strategy (it does not create
+  // session rows in the database for credentials — that path is OAuth-only).
+  if (onlyCredentials) return "jwt";
+  return "database";
+}
+
 // ─── Auth.js config ───────────────────────────────────────────────────────────
 
+const sessionStrategy = resolveSessionStrategy();
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Adapter is required for database sessions (OAuth path). For JWT sessions
+  // (dev-only credentials path) the adapter is still provided so that lookups
+  // via requireSession() → auth() → session callback can read the user record.
   adapter: DrizzleAdapter(getOwnerDb(), adapterSchema),
   session: {
-    strategy: "database",
+    strategy: sessionStrategy,
     // 30-day default; can be shortened for higher security
     maxAge: 30 * 24 * 60 * 60,
   },
@@ -145,12 +167,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: "/sign-in",
   },
   callbacks: {
-    // Expose the DB user id on the session object so server code can call withUser()
-    async session({ session, user }) {
-      if (user?.id) {
-        session.user.id = user.id;
+    // Expose the DB user id on the session object so server code can call withUser().
+    // Works for both database sessions (user param populated by adapter) and JWT
+    // sessions (token.sub carries the user id set by the authorize callback).
+    async session({ session, user, token }) {
+      const id = user?.id ?? (token?.sub as string | undefined);
+      if (id) {
+        session.user.id = id;
       }
       return session;
+    },
+    // For JWT sessions (dev credentials path): persist the user id from
+    // authorize() return value into the JWT so session() can read it.
+    async jwt({ token, user }) {
+      if (user?.id) {
+        token.sub = user.id;
+      }
+      return token;
     },
   },
   // Never log sensitive data
