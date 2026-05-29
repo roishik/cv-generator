@@ -32,3 +32,7 @@ test-results/
 
 # Misc
 *.pem
+
+# Orchestration runtime (babysitter / cc10x)
+.a5c/
+.cc10x/

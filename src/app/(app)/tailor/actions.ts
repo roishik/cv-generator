@@ -28,6 +28,14 @@ import { runQaChecks } from "@/lib/qa/assertions";
 import { getStorage } from "@/lib/storage/local-fs";
 import { getEnv } from "@/env";
 import { tailorToJob, type TailorToJobResult } from "@/lib/tailor/pipeline";
+import {
+  loadKnowledgeBase,
+  loadBaselineCvData,
+  projectBaselineCvData,
+} from "@/lib/tailor/kb-loader";
+import { recommendTemplate } from "@/lib/tailor/template-heuristic";
+import { verifyTruthfulness, type TruthfulnessReport } from "@/lib/ai/truthfulness";
+import { computeStructuredDiff, type StructuredDiff } from "@/lib/tailor/diff";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Input validation
@@ -301,6 +309,186 @@ export async function reRenderDocument(
     cvDocumentId: input.cvDocumentId,
     artifact: { id: artifactId, byteSize: pdf.pdf.byteLength, pageCount: 1 },
   };
+}
+
+export interface WorkspaceBaseline {
+  /** Whether the user has a knowledge base yet (false → must onboard first). */
+  hasKnowledgeBase: boolean;
+  /** The baseline (untailored) CvData, rendered as the always-on preview. */
+  baseline: CvData | null;
+  /** Default template (the user's KB-seeded default). */
+  templateId: TemplateId;
+}
+
+/**
+ * Load the workspace's "new tailor" entry state: the user's baseline CvData so
+ * the preview is never blank, plus the default template. DETERMINISTIC, 0 LLM.
+ */
+export async function getWorkspaceBaseline(): Promise<WorkspaceBaseline> {
+  const userId = await requireSession();
+  return withUser(userId, async (tx) => {
+    let kb;
+    try {
+      kb = await loadKnowledgeBase(tx, userId);
+    } catch {
+      return { hasKnowledgeBase: false, baseline: null, templateId: "sidebar" as TemplateId };
+    }
+    const baseline =
+      (await loadBaselineCvData(tx, userId, kb.knowledgeBaseId)) ??
+      projectBaselineCvData(kb.knowledgeBase);
+    return {
+      hasKnowledgeBase: true,
+      baseline,
+      templateId: "sidebar" as TemplateId,
+    };
+  });
+}
+
+/**
+ * Deterministic template recommendation for a pasted JD (heuristic, 0 LLM).
+ * Drives the "Detected role / recommended template" chips before generation.
+ */
+export async function recommendTemplateForJd(
+  jobDescription: string,
+): Promise<{ templateId: TemplateId; reason: string; signals: { clean: number; sidebar: number } }> {
+  await requireSession();
+  const rec = recommendTemplate(jobDescription ?? "");
+  return { templateId: rec.templateId, reason: rec.reason, signals: rec.signals };
+}
+
+/**
+ * Re-verify a tailored document's CvData against the user's knowledge base.
+ * PURE deterministic guardrail — surfaces fabrication flags before download,
+ * including ones introduced by inline edits (since reRenderDocument persists
+ * edited content). Returns a fresh TruthfulnessReport.
+ */
+export async function verifyVersionTruthfulness(
+  cvDocumentId: string,
+  cvData: z.input<typeof CvData>,
+): Promise<TruthfulnessReport> {
+  z.string().uuid().parse(cvDocumentId);
+  const userId = await requireSession();
+  const parsed = CvData.parse(cvData);
+  return withUser(userId, async (tx) => {
+    const kb = await loadKnowledgeBase(tx, userId);
+    return verifyTruthfulness(parsed, kb.knowledgeBase);
+  });
+}
+
+/**
+ * Recompute the structured baseline→edited diff for a version after inline
+ * edits, so the Changes panel stays accurate. PURE, 0 LLM.
+ */
+export async function recomputeDiff(
+  cvDocumentId: string,
+  editedCvData: z.input<typeof CvData>,
+): Promise<StructuredDiff> {
+  z.string().uuid().parse(cvDocumentId);
+  const userId = await requireSession();
+  const edited = CvData.parse(editedCvData);
+  return withUser(userId, async (tx) => {
+    const kb = await loadKnowledgeBase(tx, userId);
+    const baseline =
+      (await loadBaselineCvData(tx, userId, kb.knowledgeBaseId)) ??
+      projectBaselineCvData(kb.knowledgeBase);
+    return computeStructuredDiff(baseline, edited);
+  });
+}
+
+/** Rename a tailored document's label. RLS-scoped. */
+export async function renameVersion(
+  cvDocumentId: string,
+  label: string,
+): Promise<{ ok: boolean }> {
+  z.string().uuid().parse(cvDocumentId);
+  const clean = z.string().min(1).max(200).parse(label.trim());
+  const userId = await requireSession();
+  await withUser(userId, (tx) =>
+    tx
+      .update(cvDocuments)
+      .set({ label: clean })
+      .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.id, cvDocumentId))),
+  );
+  return { ok: true };
+}
+
+/** Delete a tailored document (and its artifact via cascade). RLS-scoped. */
+export async function deleteVersion(cvDocumentId: string): Promise<{ ok: boolean }> {
+  z.string().uuid().parse(cvDocumentId);
+  const userId = await requireSession();
+  await withUser(userId, (tx) =>
+    tx
+      .delete(cvDocuments)
+      .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.id, cvDocumentId))),
+  );
+  return { ok: true };
+}
+
+/**
+ * Restore an older version as a NEW version (non-destructive). Copies the
+ * document's CvData + template into a fresh tailored row and renders it.
+ */
+export async function restoreVersion(
+  cvDocumentId: string,
+): Promise<{ ok: boolean; newId: string }> {
+  z.string().uuid().parse(cvDocumentId);
+  const userId = await requireSession();
+
+  const src = await withUser(userId, async (tx) => {
+    const [d] = await tx
+      .select()
+      .from(cvDocuments)
+      .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.id, cvDocumentId)))
+      .limit(1);
+    return d;
+  });
+  if (!src) throw new Error("Version not found");
+
+  const cvData = CvData.parse(src.cvData);
+  const templateId = src.templateId as TemplateId;
+
+  // Compute next version number.
+  const nextVersion = await withUser(userId, async (tx) => {
+    const rows = await tx
+      .select({ version: cvDocuments.version })
+      .from(cvDocuments)
+      .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.kind, "tailored")));
+    return rows.reduce((m, r) => Math.max(m, r.version), 0) + 1;
+  });
+
+  const newId = await withUser(userId, async (tx) => {
+    const [doc] = await tx
+      .insert(cvDocuments)
+      .values({
+        userId,
+        kind: "tailored",
+        parentId: src.id,
+        version: nextVersion,
+        templateId,
+        themeId: src.themeId,
+        knowledgeBaseId: src.knowledgeBaseId,
+        kbVersion: src.kbVersion,
+        jobDescriptionId: src.jobDescriptionId,
+        cvData: src.cvData as Record<string, unknown>,
+        rationale: src.rationale as unknown[],
+        warnings: src.warnings as unknown[],
+        diff: src.diff as Record<string, unknown>,
+        truthfulness: src.truthfulness as Record<string, unknown>,
+        tailorCacheKey: null,
+        label: `${src.label ?? "Tailored"} (restored v${src.version})`,
+      })
+      .returning({ id: cvDocuments.id });
+    return doc!.id;
+  });
+
+  // Render a fresh artifact for the restored version (best-effort).
+  try {
+    await reRenderDocument({ cvDocumentId: newId, cvData, templateId });
+  } catch {
+    // Render failure is non-fatal — the version still exists and can be re-rendered.
+  }
+
+  return { ok: true, newId };
 }
 
 /**
