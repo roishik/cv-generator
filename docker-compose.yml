@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cvgen-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cvgen
+    ports:
+      - "5432:5432"
+    volumes:
+      - cvgen-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cvgen"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  cvgen-db-data:
+    name: cvgen-db-data

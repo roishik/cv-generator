@@ -16,10 +16,12 @@ build/
 
 # Generated / runtime
 /output/
+/storage/
 *.local
 coverage/
 playwright-report/
 test-results/
+.next/
 
 # OS / editor
 .DS_Store
