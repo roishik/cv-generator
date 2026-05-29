@@ -1,75 +1,155 @@
 @import "tailwindcss";
 
 /**
- * Editorial Studio design tokens (from 02-ux-design-spec.md §2)
- * CSS variables for shadcn/ui + custom components
+ * Editorial Studio — design tokens (02-ux-design-spec.md §2)
+ *
+ * Palette:
+ *   paper-50  #FBFAF7  warm paper-white canvas (app bg light)
+ *   paper-100 #F4F2EC  subtle raised surfaces
+ *   paper-200 #E9E6DD  hairline borders
+ *   paper-300 #D8D4C8  stronger borders / disabled
+ *   ink-900   #1A1B19  warm near-black (primary text light)
+ *   ink-700   #3C3E3A  secondary text
+ *   ink-500   #6B6E67  muted text
+ *   ink-400   #8E9189  placeholder
+ *   spruce-700 #1F4A3D accent pressed/dark
+ *   spruce-600 #256B53 primary accent (buttons, links, focus)
+ *   spruce-500 #2E8268 accent hover / success
+ *   spruce-100 #DCEBE4 accent tint bg
+ *   amber-600  #B5740F AI/diff emphasis
+ *   amber-500  #D98A1A AI hover
+ *   amber-100  #F8ECD4 AI tint bg
+ *
+ * Dark mode = "studio at night": warm charcoal, not cold blue-black.
+ *   bg       #181814  warm charcoal
+ *   surface-1 #202019 cards
+ *   surface-2 #2A2A22 raised / popovers
+ *   border   #37372E  hairlines
+ *
+ * CV preview is ALWAYS rendered on white paper regardless of app theme.
+ * The .cv-paper wrapper enforces this (see bottom of file).
  */
 
+/* ──────────────────────────────────────────────────────────────
+   shadcn/ui CSS variable contract (HSL triples, no hsl() wrapper)
+   ────────────────────────────────────────────────────────────── */
 :root {
-  /* Base */
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
+  /* Background — paper-50 #FBFAF7 */
+  --background: 48 33% 98%;
+  --foreground: 80 5% 10%;          /* ink-900 #1A1B19 */
 
-  /* Card */
+  /* Card — pure white floats on paper bg */
   --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
+  --card-foreground: 80 5% 10%;
 
   /* Popover */
   --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
+  --popover-foreground: 80 5% 10%;
 
-  /* Primary — ink navy (#323B4C from sidebar template) */
-  --primary: 218 20% 24%;
-  --primary-foreground: 0 0% 100%;
+  /* Primary — spruce-600 #256B53 */
+  --primary: 159 47% 28%;
+  --primary-foreground: 48 33% 98%;
 
-  /* Secondary */
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
+  /* Secondary — paper-100 #F4F2EC */
+  --secondary: 45 24% 94%;
+  --secondary-foreground: 80 5% 10%;
 
   /* Muted */
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
+  --muted: 45 24% 94%;
+  --muted-foreground: 90 3% 43%;   /* ink-500 #6B6E67 */
 
-  /* Accent — spruce/amber from Editorial Studio */
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
+  /* Accent — amber-100 tint / amber-600 text */
+  --accent: 38 86% 90%;            /* amber-100 #F8ECD4 */
+  --accent-foreground: 36 86% 38%; /* amber-600 #B5740F */
 
-  /* Destructive */
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
+  /* Destructive — clay #B23B2E */
+  --destructive: 5 59% 44%;
+  --destructive-foreground: 48 33% 98%;
 
-  /* Border / Input / Ring */
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 218 20% 24%;
+  /* Border / input — paper-200 #E9E6DD */
+  --border: 42 22% 89%;
+  --input: 42 22% 89%;
 
-  /* Radius */
-  --radius: 0.5rem;
+  /* Focus ring — spruce */
+  --ring: 159 47% 28%;
+
+  /* Radius — radius-md = 10px */
+  --radius: 0.625rem;
+
+  /* ── Product-specific tokens (not shadcn defaults) ── */
+  --ai: 36 86% 38%;                /* amber-600 — AI/diff emphasis */
+  --ai-bg: 38 86% 90%;             /* amber-100 — AI tint */
+  --diff-added-bg: 38 86% 90%;
+  --diff-removed-bg: 5 59% 92%;
+
+  /* Raw palette tokens (used by styleguide + components) */
+  --paper-50: #FBFAF7;
+  --paper-100: #F4F2EC;
+  --paper-200: #E9E6DD;
+  --paper-300: #D8D4C8;
+  --ink-900: #1A1B19;
+  --ink-700: #3C3E3A;
+  --ink-500: #6B6E67;
+  --ink-400: #8E9189;
+  --spruce-700: #1F4A3D;
+  --spruce-600: #256B53;
+  --spruce-500: #2E8268;
+  --spruce-100: #DCEBE4;
+  --amber-600: #B5740F;
+  --amber-500: #D98A1A;
+  --amber-100: #F8ECD4;
 }
 
 .dark {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --card: 222.2 84% 4.9%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 210 40% 98%;
-  --primary-foreground: 222.2 47.4% 11.2%;
-  --secondary: 217.2 32.6% 17.5%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 212.7 26.8% 83.9%;
+  /* Background — warm charcoal #181814 */
+  --background: 60 8% 9%;
+  --foreground: 45 24% 94%;        /* paper-100 on dark */
+
+  /* Card — surface-1 #202019 */
+  --card: 70 7% 12%;
+  --card-foreground: 45 24% 94%;
+
+  /* Popover — surface-2 #2A2A22 */
+  --popover: 70 7% 14%;
+  --popover-foreground: 45 24% 94%;
+
+  /* Primary — spruce-dark #4FB492 (lifted for contrast on dark) */
+  --primary: 159 39% 51%;
+  --primary-foreground: 60 8% 9%;
+
+  /* Secondary */
+  --secondary: 70 7% 14%;
+  --secondary-foreground: 45 24% 94%;
+
+  /* Muted */
+  --muted: 70 7% 14%;
+  --muted-foreground: 80 5% 64%;
+
+  /* Accent — amber tint on dark */
+  --accent: 40 47% 16%;            /* amber-dark-tint #3A2E14 */
+  --accent-foreground: 38 70% 57%; /* amber-dark #E0A341 */
+
+  /* Destructive */
+  --destructive: 5 55% 56%;
+  --destructive-foreground: 45 24% 94%;
+
+  /* Border — #37372E */
+  --border: 70 8% 20%;
+  --input: 70 8% 20%;
+
+  /* Ring */
+  --ring: 159 39% 51%;
+
+  /* AI tokens on dark */
+  --ai: 38 70% 57%;                /* amber-dark #E0A341 */
+  --ai-bg: 40 47% 16%;             /* amber-dark-tint */
 }
 
+/* ──────────────────────────────────────────────────────────────
+   Tailwind v4 @theme — maps CSS vars to utility classes
+   ────────────────────────────────────────────────────────────── */
 @theme inline {
+  /* shadcn semantic colors */
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));
@@ -89,15 +169,157 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --radius: var(--radius);
+
+  /* AI / diff tokens */
+  --color-ai: hsl(var(--ai));
+  --color-ai-bg: hsl(var(--ai-bg));
+  --color-diff-added-bg: hsl(var(--diff-added-bg));
+  --color-diff-removed-bg: hsl(var(--diff-removed-bg));
+
+  /* Raw palette (for styleguide + component direct use) */
+  --color-paper-50: var(--paper-50);
+  --color-paper-100: var(--paper-100);
+  --color-paper-200: var(--paper-200);
+  --color-paper-300: var(--paper-300);
+  --color-ink-900: var(--ink-900);
+  --color-ink-700: var(--ink-700);
+  --color-ink-500: var(--ink-500);
+  --color-ink-400: var(--ink-400);
+  --color-spruce-700: var(--spruce-700);
+  --color-spruce-600: var(--spruce-600);
+  --color-spruce-500: var(--spruce-500);
+  --color-spruce-100: var(--spruce-100);
+  --color-amber-600: var(--amber-600);
+  --color-amber-500: var(--amber-500);
+  --color-amber-100: var(--amber-100);
+
+  /* Typography */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-fraunces), Georgia, serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Radius scale (restrained — premium ≠ super-round) */
+  --radius-sm: calc(var(--radius) - 4px);   /* 6px */
+  --radius-md: var(--radius);               /* 10px */
+  --radius-lg: calc(var(--radius) + 4px);   /* 14px */
+  --radius-full: 9999px;
+
+  /* Shadow scale (soft, neutral, layered — paper not plastic) */
+  --shadow-xs: 0 1px 2px rgba(26, 27, 25, 0.05);
+  --shadow-sm: 0 1px 3px rgba(26, 27, 25, 0.06), 0 1px 2px rgba(26, 27, 25, 0.04);
+  --shadow-md: 0 4px 12px rgba(26, 27, 25, 0.08), 0 2px 4px rgba(26, 27, 25, 0.04);
+  --shadow-lg: 0 12px 32px rgba(26, 27, 25, 0.12), 0 4px 8px rgba(26, 27, 25, 0.06);
+  --shadow-paper: 0 2px 8px rgba(26, 27, 25, 0.08), 0 16px 40px rgba(26, 27, 25, 0.10);
+
+  /* Motion */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 240ms;
 }
 
-* {
+/* ──────────────────────────────────────────────────────────────
+   Base styles
+   ────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
   border-color: hsl(var(--border));
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: Inter, system-ui, sans-serif;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.571; /* 22px / 14px */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Focus ring — spruce, visible only on keyboard navigation */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   CV paper wrapper (fixed convention)
+   The CV preview surface is ALWAYS white paper regardless of app
+   theme. Wrap any CvPreview with .cv-paper to enforce this.
+   In dark mode this sits in a darker lightbox (handled by
+   PreviewFrame) but the paper itself stays white.
+   ────────────────────────────────────────────────────────────── */
+.cv-paper {
+  background: #ffffff;
+  color: #1a1b19;
+  /* Override any dark-mode text/bg inheritance */
+  color-scheme: light;
+  font-family: 'Lato', 'Source Sans 3', sans-serif;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Motion — honor prefers-reduced-motion
+   ────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Paper-grain texture (SVG noise, ≤3% opacity)
+   Applied to the app bg and lightbox backdrop — the single most
+   effective "not-flat-AI-template" touch. Only visible on light bg.
+   ────────────────────────────────────────────────────────────── */
+.paper-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Diff highlight tokens
+   ────────────────────────────────────────────────────────────── */
+.diff-added {
+  background-color: hsl(var(--diff-added-bg));
+  text-decoration-line: underline;
+  text-decoration-color: hsl(var(--ai));
+  text-underline-offset: 2px;
+}
+
+.diff-removed {
+  background-color: hsl(var(--diff-removed-bg));
+  text-decoration-line: line-through;
+  opacity: 0.6;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Skeleton shimmer (paper-tone, 180ms)
+   ────────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted) / 0.5) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }

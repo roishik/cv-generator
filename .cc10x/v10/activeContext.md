@@ -1,18 +1,23 @@
 # Active Context
 
 ## Current Focus
-Scaffold M1 of cv-generator: Next.js App Router + TypeScript + Tailwind + shadcn/ui + ESLint/Prettier + Vitest + Playwright + Zod env + Docker Compose Postgres.
+M2 complete: Editorial Studio design system implemented — tokens, typography, app shell, styleguide, CV paper wrapper.
 
 ## Recent Changes
-- Initializing cc10x v10 memory for cv-generator scaffold build.
+- [BUILD-START: wf:wf-20260529-m2-design]
+- Implemented full Editorial Studio tokens in globals.css (Tailwind v4 @theme)
+- Added Fraunces (variable serif) + Inter fonts via next/font/google
+- Built authenticated app shell: (app)/layout.tsx, NavRail, TopBar
+- Created shared primitives: PageHeader, Section, EmptyState, LoadingSkeletons, CvPaper, PreviewFrame
+- Built comprehensive /styleguide page showing all tokens + components
+- Fixed dialog.tsx: React.ElementRef → React.ComponentRef
+- Updated landing page with Editorial Studio tokens
+- pnpm typecheck, lint, build all pass
 
 ## Next Steps
-1. Read planning docs (04-master-plan.md, 03-architecture.md, 02-ux-design-spec.md)
-2. Scaffold Next.js app at repo root (preserving existing planning/, README.md, .gitignore, .a5c/, .git/)
-3. Install and configure all tooling
-4. Write env files, docker-compose, CLAUDE.md
-5. Verify pnpm install/typecheck/lint/build all pass
-6. Commit and push
+1. M3: Render engine — Sidebar.tsx, Clean.tsx, themes, css.ts, render.ts, self-hosted fonts
+2. M4: PDF + auto-fit (browser-pool, render-pdf, measure, fit, qa)
+3. M5: Database + RLS (docker-compose, Drizzle schema, migrations, RLS policies)
 
 ## Decisions
 - [BUILD-START: wf:wf-20260529-scaffold01]
