@@ -41,7 +41,7 @@
     "vitest.config.ts",
     ".env.example"
   ],
-  "commit": "PENDING",
+  "commit": "f14d4c7",
   "verification": "pnpm install -> exit 0 | pnpm typecheck -> exit 0 (tsc --noEmit clean) | pnpm lint -> exit 0 (0 errors, 0 warnings) | pnpm build -> exit 0 (/ and /styleguide statically prerendered) | pnpm test -> exit 0 (11 unit tests passing: 7 env schema + 4 utils)",
   "openIssues": [
     "pnpm build uses Turbopack by default in Next.js 16; standard webpack build also works (no flag needed for M1)",
