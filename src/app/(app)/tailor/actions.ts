@@ -19,7 +19,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth/guards";
 import { withUser } from "@/lib/db/rls";
-import { artifacts, cvDocuments, providerKeys } from "@/lib/db/schema";
+import { artifacts, cvDocuments, jobDescriptions, providerKeys } from "@/lib/db/schema";
 import { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import { decryptKey } from "@/lib/crypto/envelope";
 import type { ProviderId } from "@/lib/ai/provider";
@@ -209,6 +209,73 @@ export async function listTailoredVersions(): Promise<
       });
     }
     return result;
+  });
+}
+
+export interface VersionHistoryItem {
+  id: string;
+  parentId: string | null;
+  version: number;
+  templateId: TemplateId;
+  label: string | null;
+  jdTitle: string | null;
+  jdCompany: string | null;
+  createdAt: string;
+  hasArtifact: boolean;
+}
+
+/**
+ * Version history for the Documents page: every tailored document with its JD
+ * title/company + parent link (for compare/restore lineage), newest first.
+ */
+export async function listVersionHistory(): Promise<VersionHistoryItem[]> {
+  const userId = await requireSession();
+  return withUser(userId, async (tx) => {
+    const docs = await tx
+      .select({
+        id: cvDocuments.id,
+        parentId: cvDocuments.parentId,
+        version: cvDocuments.version,
+        templateId: cvDocuments.templateId,
+        label: cvDocuments.label,
+        createdAt: cvDocuments.createdAt,
+        jobDescriptionId: cvDocuments.jobDescriptionId,
+      })
+      .from(cvDocuments)
+      .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.kind, "tailored")))
+      .orderBy(desc(cvDocuments.createdAt));
+
+    const out: VersionHistoryItem[] = [];
+    for (const d of docs) {
+      const [a] = await tx
+        .select({ id: artifacts.id })
+        .from(artifacts)
+        .where(eq(artifacts.cvDocumentId, d.id))
+        .limit(1);
+      let jdTitle: string | null = null;
+      let jdCompany: string | null = null;
+      if (d.jobDescriptionId) {
+        const [jd] = await tx
+          .select({ title: jobDescriptions.title, company: jobDescriptions.company })
+          .from(jobDescriptions)
+          .where(eq(jobDescriptions.id, d.jobDescriptionId))
+          .limit(1);
+        jdTitle = jd?.title ?? null;
+        jdCompany = jd?.company ?? null;
+      }
+      out.push({
+        id: d.id,
+        parentId: d.parentId,
+        version: d.version,
+        templateId: d.templateId as TemplateId,
+        label: d.label,
+        jdTitle,
+        jdCompany,
+        createdAt: d.createdAt.toISOString(),
+        hasArtifact: !!a,
+      });
+    }
+    return out;
   });
 }
 
