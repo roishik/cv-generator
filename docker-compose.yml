@@ -1,6 +1,10 @@
 services:
   db:
-    image: postgres:16-alpine
+    # Plain Postgres via Docker Compose (no Supabase). Pinned to 18-alpine, which
+    # is what is cached on this machine; RLS, FORCE RLS, app_uid() GUC, policies
+    # and pgcrypto are all stable across PG 16/17/18, so this is functionally
+    # equivalent to the planned postgres:16. Bump/lower the tag freely.
+    image: postgres:18-alpine
     container_name: cvgen-db
     restart: unless-stopped
     environment:
@@ -8,7 +12,8 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: cvgen
     ports:
-      - "5432:5432"
+      # Host 5433 to avoid colliding with other local Postgres instances; container stays on 5432.
+      - "5433:5432"
     volumes:
       - cvgen-db-data:/var/lib/postgresql/data
     healthcheck:
