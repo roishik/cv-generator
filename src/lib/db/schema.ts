@@ -292,7 +292,12 @@ export const cvDocuments = pgTable(
     }),
     cvData: jsonb("cv_data").notNull(),
     rationale: jsonb("rationale").notNull().default(sql`'[]'::jsonb`),
+    warnings: jsonb("warnings").notNull().default(sql`'[]'::jsonb`),
+    diff: jsonb("diff").notNull().default(sql`'{}'::jsonb`),
+    truthfulness: jsonb("truthfulness").notNull().default(sql`'{}'::jsonb`),
     appliedThemeOverrides: jsonb("applied_theme_overrides"),
+    /** Deterministic tailoring cache key — sha256(kbVersion + jdHash + templateId). */
+    tailorCacheKey: text("tailor_cache_key"),
     label: text("label"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -306,6 +311,7 @@ export const cvDocuments = pgTable(
       t.jobDescriptionId,
       t.templateId,
     ),
+    tailorCacheIdx: index("cvdoc_tailor_cache_idx").on(t.userId, t.tailorCacheKey),
   }),
 );
 

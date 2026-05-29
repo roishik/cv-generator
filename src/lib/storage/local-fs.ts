@@ -16,6 +16,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { getEnv } from "@/env";
 import type { Storage, StorageObject, SignedUrl } from "./storage";
 import { mintToken } from "./token";
 
@@ -101,9 +102,6 @@ let _storage: LocalFsStorage | undefined;
 
 export function getStorage(): LocalFsStorage {
   if (!_storage) {
-    // Lazy import to avoid pulling env.ts into pure modules (schema, render-engine, etc.)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getEnv } = require("@/env") as typeof import("@/env");
     const env = getEnv();
     const baseUrl = env.NEXTAUTH_URL ?? "http://localhost:3000";
     _storage = new LocalFsStorage(env.STORAGE_LOCAL_DIR, env.STORAGE_SIGNING_SECRET, baseUrl);
