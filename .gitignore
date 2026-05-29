@@ -36,3 +36,9 @@ test-results/
 # Orchestration runtime (babysitter / cc10x)
 .a5c/
 .cc10x/
+
+# Babysitter run journals (local orchestration state)
+.a5c/runs/
+.a5c/node_modules/
+.a5c/package-lock.json
+.cc10x/
