@@ -31,4 +31,13 @@ test.describe("Landing page", () => {
       page.getByText(/Editorial Studio|Style Guide|design system/i).first(),
     ).toBeVisible();
   });
+
+  test("health endpoint reports ok with db + browser true", async ({ request }) => {
+    const res = await request.get("/api/health");
+    expect(res.status()).toBe(200);
+    const body = (await res.json()) as { ok: boolean; db: boolean; browser: boolean };
+    expect(body.db).toBe(true);
+    expect(body.browser).toBe(true);
+    expect(body.ok).toBe(true);
+  });
 });

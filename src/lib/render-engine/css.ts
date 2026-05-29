@@ -79,7 +79,7 @@ header.cv-header{text-align:center;margin-bottom:14px;}
 header.cv-header .name{font-size:${pt(t, "name")};font-weight:700;letter-spacing:1.5px;margin:0 0 2px 0;text-transform:uppercase;}
 header.cv-header .title{font-size:${pt(t, "title")};font-weight:600;color:${C.accent};letter-spacing:0.5px;margin:0 0 4px 0;}
 header.cv-header .contact{font-size:${pt(t, "small")};color:#222;}
-header.cv-header .contact span{margin:0 6px;}
+header.cv-header .contact span,header.cv-header .contact a{margin:0 6px;}
 header.cv-header .contact a{color:#222;text-decoration:none;}
 section{margin-bottom:${L.sectionGapPx + 1}px;}
 h2.section-title{font-size:${pt(t, "sectionHeader")};font-weight:700;letter-spacing:${t.font.letterSpacingEm.header * 10}px;text-transform:uppercase;margin:${L.sectionGapPx}px 0 5px 0;padding-bottom:2px;border-bottom:1px solid ${C.rule};}
