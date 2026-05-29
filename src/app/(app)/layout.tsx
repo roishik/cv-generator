@@ -1,5 +1,6 @@
+import { requireSession } from "@/lib/auth/guards";
 import { NavRail } from "@/components/shell/nav-rail";
-import { TopBar } from "@/components/shell/top-bar";
+import { AppTopBar } from "@/components/shell/app-top-bar";
 
 /**
  * Authenticated app shell layout.
@@ -11,17 +12,23 @@ import { TopBar } from "@/components/shell/top-bar";
  *   │                    │                                       │
  *   └────────────────────┴───────────────────────────────────────┘
  *
- * Auth guard is a stub here — wired in M6 with requireSession().
+ * `requireSession()` redirects to /sign-in if the user is not authenticated.
+ * The middleware handles most redirects; the layout is a secondary guard for
+ * RSC renders that bypass the middleware matcher (e.g. parallel route segments).
+ *
  * CV preview pane (when rendered) always uses .cv-paper wrapper.
  */
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Guard: redirects to /sign-in if not authenticated
+  await requireSession();
+
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <TopBar />
+      <AppTopBar />
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <NavRail />
         <main

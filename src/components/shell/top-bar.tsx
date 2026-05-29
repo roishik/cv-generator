@@ -3,23 +3,30 @@
 import { Moon, Sun, Search } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { UserMenu } from "./user-menu";
 import { cn } from "@/lib/utils";
 
 /**
  * TopBar — authenticated app top bar.
  *
- * Contains: breadcrumb slot, ⌘K trigger, theme toggle, avatar/menu.
+ * Contains: breadcrumb slot, ⌘K trigger, theme toggle, avatar/sign-out.
  *
  * Theme toggle is local state for now (no provider wired yet).
  * The breadcrumb is a render slot so each page can supply its own.
+ * `userInitials` and `userName` come from the AppTopBar server wrapper
+ * which reads the Auth.js session.
  */
 
 interface TopBarProps {
   /** Optional breadcrumb content rendered in the center of the bar */
   breadcrumb?: React.ReactNode;
+  /** User initials for the avatar button */
+  userInitials?: string;
+  /** Full name / email for the title tooltip */
+  userName?: string;
 }
 
-export function TopBar({ breadcrumb }: TopBarProps) {
+export function TopBar({ breadcrumb, userInitials = "?", userName }: TopBarProps) {
   const [darkMode, setDarkMode] = useState(false);
 
   const toggleDark = useCallback(() => {
@@ -74,21 +81,8 @@ export function TopBar({ breadcrumb }: TopBarProps) {
           )}
         </Button>
 
-        {/* Avatar placeholder — wired to auth in M6 */}
-        <button
-          type="button"
-          className={cn(
-            "flex h-7 w-7 items-center justify-center rounded-full",
-            "bg-spruce-100 text-xs font-semibold text-spruce-700",
-            "dark:bg-[hsl(var(--accent))] dark:text-[hsl(var(--accent-foreground))]",
-            "transition-colors duration-120 hover:opacity-90",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-          )}
-          aria-label="Account menu"
-        >
-          {/* Monogram placeholder — replaced with real user initials in M6 */}
-          <span aria-hidden>?</span>
-        </button>
+        {/* User avatar — shows initials, click to sign out */}
+        <UserMenu initials={userInitials} name={userName} />
       </div>
     </header>
   );

@@ -65,7 +65,11 @@ const envSchema = z
   })
   .refine(
     (data) => {
-      // Google OAuth is REQUIRED in production (dev-login shim disabled in prod)
+      // Google OAuth is REQUIRED in production at runtime.
+      // We skip this check during `next build` (NEXT_PHASE=phase-production-build)
+      // because this is a local-host-first project and Google creds are optional locally.
+      // The check runs at server startup when the app actually serves requests.
+      if (process.env["NEXT_PHASE"] === "phase-production-build") return true;
       if (data.NODE_ENV === "production") {
         return !!data.GOOGLE_CLIENT_ID && !!data.GOOGLE_CLIENT_SECRET;
       }

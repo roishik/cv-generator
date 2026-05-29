@@ -63,7 +63,7 @@ See `.env.example` for the full list with comments.
 
 ```
 AUTH_SECRET=<openssl rand -base64 32>
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cvgen
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/cvgen
 STORAGE_SIGNING_SECRET=<openssl rand -base64 32>
 MASTER_KEY_SECRET=<openssl rand -base64 48>
 AUTH_DEV_LOGIN=true
@@ -71,6 +71,28 @@ AI_PROVIDER=mock
 ```
 
 The generated `.env` (gitignored) already has these filled in for local dev.
+
+## Dev-login shim (M6)
+
+When `AUTH_DEV_LOGIN=true` (and `NODE_ENV !== production`), the sign-in page
+shows one-click buttons for seeded demo users. No Google credentials required.
+
+```bash
+# 1. Start the DB
+pnpm db:up
+
+# 2. Apply migrations + seed demo users
+pnpm db:migrate && pnpm db:seed
+
+# 3. Start dev server
+pnpm dev
+# → http://localhost:3000/sign-in
+# Click "Ada Sample (sidebar)" or "Blake Fixture (clean)"
+```
+
+**Security:** the dev-login shim is HARD-DISABLED in production (`NODE_ENV=production`).
+Two independent guards: the module-load check and the `authorize()` callback check.
+Google creds stay optional locally — set them for real OAuth sign-in testing.
 
 ---
 
@@ -117,20 +139,20 @@ from `app/**`, `lib/db/**`, or `lib/auth/**`.
 
 ## Milestones
 
-| M | Scope |
-|---|---|
-| M1 | Scaffold (this commit) |
-| M2 | Schemas (CvData, ThemeTokens, KnowledgeBase, LLM contracts) |
-| M3 | Render engine (Sidebar.tsx, Clean.tsx, deterministic HTML) |
-| M4 | PDF + auto-fit + QA assertions |
-| M5 | Database + RLS (Docker Compose Postgres) |
-| M6 | Auth.js + dev-login shim |
-| M7 | Provider abstraction + BYOK crypto |
-| M8 | Storage interface + LocalFs adapter |
-| M9 | Hot path A: upload → extract → KB |
-| M10 | Hot path B: JD → tailor → render → PDF |
-| M11 | Hardening: rate limits, upload safety, redaction, e2e |
-| M12 | Deploy prep (Dockerfile, no actual deploy) |
+| M | Scope | Status |
+|---|---|---|
+| M1 | Scaffold (this commit) | Done |
+| M2 | Schemas (CvData, ThemeTokens, KnowledgeBase, LLM contracts) | - |
+| M3 | Render engine (Sidebar.tsx, Clean.tsx, deterministic HTML) | - |
+| M4 | PDF + auto-fit + QA assertions | - |
+| M5 | Database + RLS (Docker Compose Postgres) | Done |
+| M6 | Auth.js + dev-login shim | Done |
+| M7 | Provider abstraction + BYOK crypto | - |
+| M8 | Storage interface + LocalFs adapter | - |
+| M9 | Hot path A: upload → extract → KB | - |
+| M10 | Hot path B: JD → tailor → render → PDF | - |
+| M11 | Hardening: rate limits, upload safety, redaction, e2e | - |
+| M12 | Deploy prep (Dockerfile, no actual deploy) | - |
 
 ---
 
