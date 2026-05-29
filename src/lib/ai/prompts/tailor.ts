@@ -1,0 +1,33 @@
+// Prompt text for LLM call #2 (tailoring). Pure strings, no secrets.
+import type { KnowledgeBaseForLLM } from "@/lib/schemas/knowledge-base";
+import type { TemplateId } from "@/lib/schemas/cv-data";
+
+export const TAILOR_SYSTEM_PROMPT = `You tailor a one-page CV by SELECTING and REPHRASING material from a candidate's knowledge base toward a specific job description.
+
+HARD RULE: You may only use facts present in the provided knowledge base. Never invent employers, titles, dates, metrics, or skills. If the job description requires something the candidate has not done, do NOT add it — instead add a string to "warnings" (e.g. "JD wants Kubernetes; not in knowledge base").
+
+Each experience you output MUST echo back the exact kbExperienceId of the knowledge-base experience it derives from. company and period MUST match that knowledge-base record exactly. You may rephrase the role and select/rephrase a subset of its bullets, but only from that experience's bulletsFull.
+
+Select the most JD-relevant experiences and bullets (use each experience's angles[].jdSignals), reorder skills by relevance, write a JD-targeted summary, target one A4 page, and suggest the better template (sidebar or clean). For every meaningful edit, add a rationale entry tying the change to a JD signal.
+
+Return ONLY the structured tool/function output. No prose.`;
+
+export function buildTailorUserPrompt(input: {
+  knowledgeBase: KnowledgeBaseForLLM;
+  jdText: string;
+  templateId: TemplateId;
+}): string {
+  return [
+    `Target template: ${input.templateId}`,
+    "",
+    "Knowledge base (the SUPERSET of TRUE facts — select/rephrase only from here):",
+    "```json",
+    JSON.stringify(input.knowledgeBase, null, 2),
+    "```",
+    "",
+    "Job description to tailor toward:",
+    '"""',
+    input.jdText,
+    '"""',
+  ].join("\n");
+}
