@@ -45,8 +45,11 @@ pnpm dev
 | `pnpm lint` | ESLint (includes dep-direction rule) |
 | `pnpm format` | Prettier write |
 | `pnpm format:check` | Prettier check |
-| `pnpm test` | Vitest unit tests |
+| `pnpm test` | Vitest unit + integration tests |
 | `pnpm test:watch` | Vitest watch mode |
+| `pnpm test:pdf` | Render→PDF→QA tests for both templates (needs `pnpm pdf:install` once) |
+| `pnpm pdf:install` | `playwright install chromium` — required before any PDF render/test |
+| `pnpm render:smoke` | Render both templates → PDF + QA to `/tmp/cv-smoke` (dev check) |
 | `pnpm e2e` | Playwright e2e tests |
 | `pnpm db:up` | Start Postgres container (`docker compose up -d db`) |
 | `pnpm db:down` | Stop Postgres container |
@@ -142,9 +145,9 @@ from `app/**`, `lib/db/**`, or `lib/auth/**`.
 | M | Scope | Status |
 |---|---|---|
 | M1 | Scaffold (this commit) | Done |
-| M2 | Schemas (CvData, ThemeTokens, KnowledgeBase, LLM contracts) | - |
-| M3 | Render engine (Sidebar.tsx, Clean.tsx, deterministic HTML) | - |
-| M4 | PDF + auto-fit + QA assertions | - |
+| M2 | Schemas — CvData + ThemeTokens done (`lib/schemas/cv-data.ts`); KB/LLM contracts pending | Partial |
+| M3 | Render engine (Sidebar.tsx, Clean.tsx, self-hosted fonts, deterministic HTML) | Done |
+| M4 | PDF (Playwright pool) + auto-fit ladder + QA assertions | Done |
 | M5 | Database + RLS (Docker Compose Postgres) | Done |
 | M6 | Auth.js + dev-login shim | Done |
 | M7 | Provider abstraction + BYOK crypto | - |
