@@ -24,6 +24,7 @@ import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { eq } from "drizzle-orm";
+import { resolveSessionStrategy } from "@/lib/auth/session-strategy";
 import { getOwnerDb } from "@/lib/db/client";
 import {
   users,
@@ -138,18 +139,20 @@ const adapterSchema: any = {
 // This only applies in dev/test (Google creds are REQUIRED in production via
 // the env validation in lib/env.ts, so production always has an OAuth provider
 // and always uses database sessions for server-side revocation).
-function resolveSessionStrategy(): "database" | "jwt" {
-  const hasOAuth = !!(process.env["GOOGLE_CLIENT_ID"] && process.env["GOOGLE_CLIENT_SECRET"]);
-  const onlyCredentials = !hasOAuth && isDevLoginEnabled();
-  // Auth.js v5: Credentials-only requires JWT strategy (it does not create
-  // session rows in the database for credentials — that path is OAuth-only).
-  if (onlyCredentials) return "jwt";
-  return "database";
+// Strategy decision lives in a pure, unit-tested helper (see session-strategy.ts).
+function resolveSessionStrategyLocal(): "database" | "jwt" {
+  const hasOAuth = !!(
+    process.env["GOOGLE_CLIENT_ID"] && process.env["GOOGLE_CLIENT_SECRET"]
+  );
+  return resolveSessionStrategy({
+    hasOAuth,
+    devLoginEnabled: isDevLoginEnabled(),
+  });
 }
 
 // ─── Auth.js config ───────────────────────────────────────────────────────────
 
-const sessionStrategy = resolveSessionStrategy();
+const sessionStrategy = resolveSessionStrategyLocal();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // Adapter is required for database sessions (OAuth path). For JWT sessions
