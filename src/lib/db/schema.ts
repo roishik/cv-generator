@@ -140,6 +140,9 @@ export const knowledgeBases = pgTable(
     header: jsonb("header").notNull().default(sql`'{}'::jsonb`),
     contact: jsonb("contact").notNull().default(sql`'{}'::jsonb`),
     languages: jsonb("languages").notNull().default(sql`'[]'::jsonb`),
+    // Leadership/impact entries (sidebar-only). Stored as JSON on the KB row,
+    // mirroring `languages` — small array, no need for a normalized child table.
+    leadership: jsonb("leadership").notNull().default(sql`'[]'::jsonb`),
     sourceUploadId: uuid("source_upload_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

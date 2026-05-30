@@ -68,39 +68,45 @@ export function Sidebar({ data }: { data: CvData; theme: ThemeTokens }) {
           )}
         </div>
 
-        <div className="sidebar-divider" />
-
-        {/* Professional Skills */}
-        <div className="sidebar-section" data-section="skills">
-          <div className="sidebar-section-header">Professional Skills</div>
-          <div data-field="professional">
-            {skills.professional.map((s, i) => (
-              <div className="skill-item" key={i}>
-                <div className="skill-bullet" />
-                <span className="skill-text" data-skill-index={i}>
-                  {s}
-                </span>
+        {/* Professional Skills — omit the section entirely when empty. */}
+        {skills.professional.length > 0 && (
+          <>
+            <div className="sidebar-divider" />
+            <div className="sidebar-section" data-section="skills">
+              <div className="sidebar-section-header">Professional Skills</div>
+              <div data-field="professional">
+                {skills.professional.map((s, i) => (
+                  <div className="skill-item" key={i}>
+                    <div className="skill-bullet" />
+                    <span className="skill-text" data-skill-index={i}>
+                      {s}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
 
-        <div className="sidebar-divider" />
-
-        {/* Soft Skills */}
-        <div className="sidebar-section" data-section="soft-skills">
-          <div className="sidebar-section-header">Soft Skills</div>
-          <div data-field="soft">
-            {skills.soft.map((s, i) => (
-              <div className="skill-item" key={i}>
-                <div className="skill-bullet" />
-                <span className="skill-text" data-skill-index={i}>
-                  {s}
-                </span>
+        {/* Soft Skills — omit the section entirely when empty. */}
+        {skills.soft.length > 0 && (
+          <>
+            <div className="sidebar-divider" />
+            <div className="sidebar-section" data-section="soft-skills">
+              <div className="sidebar-section-header">Soft Skills</div>
+              <div data-field="soft">
+                {skills.soft.map((s, i) => (
+                  <div className="skill-item" key={i}>
+                    <div className="skill-bullet" />
+                    <span className="skill-text" data-skill-index={i}>
+                      {s}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
 
         {/* Leadership & Impact (sidebar-only) */}
         {leadership.length > 0 && (

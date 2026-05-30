@@ -97,6 +97,25 @@ async function seedKnowledgeBase(u: DemoUser) {
     const expId = randomUUID();
     const exp2Id = randomUUID();
     const eduId = randomUUID();
+    const lead1Id = randomUUID();
+    const lead2Id = randomUUID();
+
+    const leadership = [
+      {
+        id: lead1Id,
+        name: "Widget Mentorship Circle",
+        description: "Founded a make-believe mentorship circle for aspiring widget engineers.",
+        url: "example.test/mentorship",
+        tags: ["mentoring", "community"],
+      },
+      {
+        id: lead2Id,
+        name: "Open Placeholder Project",
+        description: "Maintains a fictional open-source placeholder library used by nobody.",
+        url: "example.test/oss",
+        tags: ["open-source"],
+      },
+    ];
 
     await tx.insert(knowledgeBases).values({
       id: kbId,
@@ -121,6 +140,7 @@ async function seedKnowledgeBase(u: DemoUser) {
         { name: "English", level: "Native" },
         { name: "Demolang", level: "Professional" },
       ],
+      leadership,
     });
 
     await tx.insert(kbExperiences).values([
@@ -231,7 +251,12 @@ async function seedKnowledgeBase(u: DemoUser) {
           note: "Minor in Placeholder Studies",
         },
       ],
-      leadership: [],
+      leadership: leadership.map((l) => ({
+        kbLeadershipId: l.id,
+        name: l.name,
+        description: l.description,
+        url: l.url,
+      })),
       languages: [
         { name: "English", level: "Native" },
         { name: "Demolang", level: "Professional" },

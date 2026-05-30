@@ -76,6 +76,8 @@ export interface TailorWorkspaceInitial {
   artifactId: string | null;
   serverFits: boolean | null;
   label: string | null;
+  /** Active AI provider line, e.g. "OpenAI · gpt-5.4" or "Mock · deterministic". */
+  providerLabel: string;
 }
 
 type Tab = "job" | "preview" | "changes";
@@ -379,7 +381,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
 
       {/* Generate / progress */}
       {generating ? (
-        <GenerationProgress provider="Mock · deterministic" running={generating} />
+        <GenerationProgress provider={initial.providerLabel} running={generating} />
       ) : (
         <Button
           onClick={handleGenerate}

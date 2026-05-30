@@ -1,4 +1,6 @@
 import { TailorWorkspace, type TailorWorkspaceInitial } from "@/components/product/TailorWorkspace";
+import { describeProvider } from "@/lib/ai/describe-provider";
+import { getEnv } from "@/env";
 
 export const metadata = { title: "Tailor — Lapel" };
 
@@ -20,6 +22,7 @@ export default async function TailorPage() {
     artifactId: null,
     serverFits: null,
     label: "Untitled draft",
+    providerLabel: describeProvider(getEnv().AI_PROVIDER).label,
   };
 
   try {

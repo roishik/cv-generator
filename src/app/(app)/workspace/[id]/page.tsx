@@ -3,6 +3,8 @@ import { TailorWorkspace, type TailorWorkspaceInitial } from "@/components/produ
 import type { CvData } from "@/lib/schemas/cv-data";
 import type { StructuredDiff } from "@/lib/tailor/diff";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
+import { describeProvider } from "@/lib/ai/describe-provider";
+import { getEnv } from "@/env";
 
 export const metadata = { title: "Workspace — Lapel" };
 
@@ -38,6 +40,7 @@ export default async function WorkspacePage({
     artifactId: doc.artifact?.id ?? null,
     serverFits: doc.artifact ? true : null,
     label: doc.label,
+    providerLabel: describeProvider(getEnv().AI_PROVIDER).label,
   };
 
   return (

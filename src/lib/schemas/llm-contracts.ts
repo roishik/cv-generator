@@ -275,7 +275,7 @@ export const TAILOR_CV_JSON_SCHEMA = {
       cvData: {
         type: "object",
         additionalProperties: false,
-        required: ["header", "contact", "summary", "skills", "experience", "education"],
+        required: ["header", "contact", "summary", "skills", "experience", "education", "leadership"],
         properties: {
           header: {
             type: "object",

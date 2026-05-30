@@ -260,6 +260,7 @@ async function runExtractionWithCache(
         header: knowledgeBase.header as Record<string, unknown>,
         contact: knowledgeBase.contact as Record<string, unknown>,
         languages: knowledgeBase.languages as unknown[],
+        leadership: knowledgeBase.leadership as unknown[],
         sourceUploadId: uploadId ?? null,
       })
       .returning({ id: knowledgeBases.id, version: knowledgeBases.version });

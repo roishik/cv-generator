@@ -12,6 +12,7 @@ import {
   deleteProviderKey,
   setActiveProvider,
 } from "@/app/(app)/settings/actions";
+import type { ProviderDescription } from "@/lib/ai/describe-provider";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -50,21 +51,42 @@ type ProviderId = "anthropic" | "openai" | "google" | "deepseek";
 // Mock active badge
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MockProviderBadge() {
+function ProviderBadge({ provider }: { provider: ProviderDescription }) {
+  if (provider.isMock) {
+    return (
+      <div
+        className="flex items-start gap-3 rounded-lg border border-amber-100 bg-[hsl(var(--ai-bg))] p-4"
+        role="status"
+        aria-label="Mock provider active"
+      >
+        <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-ai" aria-hidden />
+        <div>
+          <p className="text-[13px] font-medium text-ai">Mock provider active</p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Running in local dev mode with{" "}
+            <code className="font-mono text-[11px]">AI_PROVIDER=mock</code>. No
+            real AI calls — deterministic output, zero spend. Add a key below to
+            use a real provider.
+          </p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div
-      className="flex items-start gap-3 rounded-lg border border-amber-100 bg-[hsl(var(--ai-bg))] p-4"
+      className="flex items-start gap-3 rounded-lg border border-spruce-200 bg-spruce-50 p-4"
       role="status"
-      aria-label="Mock provider active"
+      aria-label={`${provider.name} provider active`}
     >
-      <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-ai" aria-hidden />
+      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-spruce-600" aria-hidden />
       <div>
-        <p className="text-[13px] font-medium text-ai">Mock provider active</p>
+        <p className="text-[13px] font-medium text-spruce-700">
+          {provider.name} active · {provider.model}
+        </p>
         <p className="mt-0.5 text-[12px] text-muted-foreground">
-          Running in local dev mode with{" "}
-          <code className="font-mono text-[11px]">AI_PROVIDER=mock</code>. No
-          real AI calls — deterministic output, zero spend. Add a key below to
-          use a real provider.
+          Tailoring and extraction use your {provider.name} key (
+          <code className="font-mono text-[11px]">AI_PROVIDER={provider.provider}</code>
+          ). Add or remove keys below.
         </p>
       </div>
     </div>
@@ -259,9 +281,10 @@ function ProviderCard({
 
 interface ByokKeysPanelProps {
   initialKeys: ProviderKeyInfo[];
+  provider: ProviderDescription;
 }
 
-export function ByokKeysPanel({ initialKeys }: ByokKeysPanelProps) {
+export function ByokKeysPanel({ initialKeys, provider }: ByokKeysPanelProps) {
   const [keys, setKeys] = useState<ProviderKeyInfo[]>(initialKeys);
 
   function handleSaved(info: ProviderKeyInfo) {
@@ -285,7 +308,7 @@ export function ByokKeysPanel({ initialKeys }: ByokKeysPanelProps) {
 
   return (
     <div className="space-y-4">
-      <MockProviderBadge />
+      <ProviderBadge provider={provider} />
 
       {/* Provider cards */}
       <div className="space-y-3" role="list" aria-label="Configured AI providers">

@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { extractProfileFromUpload, extractProfileFromText } from "@/app/(app)/onboarding/actions";
 import type { ExtractionActionResult } from "@/app/(app)/onboarding/actions";
+import type { ProviderDescription } from "@/lib/ai/describe-provider";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step rail
@@ -421,9 +422,10 @@ function Step2Review({ result, onContinue }: Step2Props) {
 
 interface Step3Props {
   onFinish: () => void;
+  provider: ProviderDescription;
 }
 
-function Step3ApiKey({ onFinish }: Step3Props) {
+function Step3ApiKey({ onFinish, provider }: Step3Props) {
   const router = useRouter();
 
   function goToSettings() {
@@ -442,15 +444,27 @@ function Step3ApiKey({ onFinish }: Step3Props) {
         </p>
       </div>
 
-      {/* Mock notice */}
-      <div className="rounded-lg border border-[hsl(var(--ai-bg))] bg-[hsl(var(--ai-bg))] p-4">
-        <p className="text-[13px] font-medium text-ai">Running on mock provider</p>
-        <p className="mt-1 text-[12px] text-muted-foreground">
-          Locally, tailoring works out of the box with{" "}
-          <code className="font-mono text-[11px]">AI_PROVIDER=mock</code>. Add
-          a real key to use Claude, GPT-4, or Gemini in production.
-        </p>
-      </div>
+      {/* Provider notice — reflects the actually-configured provider */}
+      {provider.isMock ? (
+        <div className="rounded-lg border border-[hsl(var(--ai-bg))] bg-[hsl(var(--ai-bg))] p-4">
+          <p className="text-[13px] font-medium text-ai">Running on mock provider</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Locally, tailoring works out of the box with{" "}
+            <code className="font-mono text-[11px]">AI_PROVIDER=mock</code>. Add
+            a real key to use Claude, GPT, or Gemini.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-spruce-200 bg-spruce-50 p-4">
+          <p className="text-[13px] font-medium text-spruce-700">
+            {provider.name} active · {provider.model}
+          </p>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Extraction and tailoring use your {provider.name} key. Manage keys in
+            Settings.
+          </p>
+        </div>
+      )}
 
       {/* Provider logos placeholder */}
       <div className="flex items-center justify-center gap-4">
@@ -474,7 +488,7 @@ function Step3ApiKey({ onFinish }: Step3Props) {
           className="w-full text-muted-foreground"
           onClick={onFinish}
         >
-          Skip for now — use mock locally
+          {provider.isMock ? "Skip for now — use mock locally" : "Continue to dashboard"}
         </Button>
       </div>
 
@@ -496,7 +510,7 @@ function Step3ApiKey({ onFinish }: Step3Props) {
 // Main wizard
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function OnboardingWizard() {
+export function OnboardingWizard({ provider }: { provider: ProviderDescription }) {
   const [step, setStep] = useState(0);
   const [extractionResult, setExtractionResult] = useState<ExtractionActionResult | null>(null);
   const router = useRouter();
@@ -524,7 +538,7 @@ export function OnboardingWizard() {
           {step === 1 && extractionResult && (
             <Step2Review result={extractionResult} onContinue={handleReviewContinue} />
           )}
-          {step === 2 && <Step3ApiKey onFinish={handleFinish} />}
+          {step === 2 && <Step3ApiKey onFinish={handleFinish} provider={provider} />}
         </div>
 
         {/* Skip */}

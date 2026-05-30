@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/schema";
 import { KnowledgeBase, type KbAngle } from "@/lib/schemas/knowledge-base";
 import { CvData } from "@/lib/schemas/cv-data";
+import { sanitizeSkills } from "@/lib/ai/sanitize-skills";
 
 export interface LoadedKnowledgeBase {
   knowledgeBaseId: string;
@@ -64,10 +65,14 @@ export async function loadKnowledgeBase(
       .orderBy(asc(kbSkills.ord)),
   ]);
 
-  const professional = skillRows
-    .filter((s) => s.category === "professional")
-    .map((s) => s.value);
-  const soft = skillRows.filter((s) => s.category === "soft").map((s) => s.value);
+  // Sanitize defensively so already-stored KBs (extracted before the guard
+  // existed) don't render header-like junk such as a stray "Soft Skills" item.
+  const { professional, soft } = sanitizeSkills({
+    professional: skillRows
+      .filter((s) => s.category === "professional")
+      .map((s) => s.value),
+    soft: skillRows.filter((s) => s.category === "soft").map((s) => s.value),
+  });
 
   const header = (kb.header ?? {}) as Record<string, unknown>;
   const contact = (kb.contact ?? {}) as Record<string, unknown>;
@@ -102,7 +107,10 @@ export async function loadKnowledgeBase(
       ...(ed.period ? { period: ed.period } : {}),
       ...(ed.note ? { note: ed.note } : {}),
     })),
-    leadership: [],
+    leadership:
+      (kb.leadership as
+        | { id: string; name: string; description: string; url?: string; tags?: string[] }[]
+        | null) ?? [],
     skills: { professional, soft },
     languages: (kb.languages as { name: string; level: string }[]) ?? [],
   });

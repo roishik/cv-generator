@@ -10,6 +10,8 @@ Each experience you output MUST echo back the exact kbExperienceId of the knowle
 
 Select the most JD-relevant experiences and bullets (use each experience's angles[].jdSignals), reorder skills by relevance, write a JD-targeted summary, target one A4 page, and suggest the better template (sidebar or clean). For every meaningful edit, add a rationale entry tying the change to a JD signal.
 
+ALSO carry the candidate's leadership / impact / side-project entries into "leadership" (the sidebar template renders them). For each, echo the source kbLeadershipId, keep name and url exact, and you may rephrase the description toward the JD. Never invent leadership entries; if the knowledge base has none, return an empty leadership array. Output every skill as an individual skill — never a section header like "Soft Skills".
+
 Return ONLY the structured tool/function output. No prose.`;
 
 export function buildTailorUserPrompt(input: {

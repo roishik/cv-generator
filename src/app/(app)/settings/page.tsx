@@ -1,6 +1,8 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { ByokKeysPanel } from "@/components/product/ByokKeysPanel";
 import { listProviderKeys } from "./actions";
+import { describeProvider } from "@/lib/ai/describe-provider";
+import { getEnv } from "@/env";
 
 export const metadata = {
   title: "Settings — Tailor",
@@ -8,6 +10,7 @@ export const metadata = {
 
 export default async function SettingsPage() {
   const keys = await listProviderKeys();
+  const provider = describeProvider(getEnv().AI_PROVIDER);
 
   return (
     <div className="mx-auto max-w-[768px] p-6 md:p-8">
@@ -26,7 +29,7 @@ export default async function SettingsPage() {
             Bring your own AI key. Keys are encrypted at rest with AES-256-GCM
             and never logged or returned in plaintext.
           </p>
-          <ByokKeysPanel initialKeys={keys} />
+          <ByokKeysPanel initialKeys={keys} provider={provider} />
         </section>
       </div>
     </div>

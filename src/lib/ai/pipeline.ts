@@ -10,6 +10,7 @@ import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import type { ExtractionResult } from "@/lib/schemas/llm-contracts";
 import { normalizeTailorCvData, computeDiff, type CvDiffEntry } from "./contracts";
 import { verifyTruthfulness, type TruthfulnessReport } from "./truthfulness";
+import { sanitizeSkills } from "./sanitize-skills";
 
 export interface ExtractProfileOutput {
   /** Raw provider extraction (resume facts, no synthesized ids). */
@@ -69,7 +70,9 @@ export async function extractProfile(
       ...(l.url ? { url: l.url } : {}),
       tags: l.tags ?? [],
     })),
-    skills: profile.skills,
+    // Drop header-like / empty skill values (e.g. a stray "Soft Skills" item)
+    // so the projected CV never renders a degenerate skill section.
+    skills: sanitizeSkills(profile.skills),
     languages: profile.languages ?? [],
   });
 
@@ -112,6 +115,17 @@ export async function tailorCv(
   });
 
   const cvData = normalizeTailorCvData(result);
+
+  // Defensive correctness, independent of the provider's behaviour:
+  //  - Sanitize skills (drop header-like/empty values the model may echo).
+  //  - Carry baseline leadership forward when the model omits it. Leadership is
+  //    sidebar-only and providers frequently drop it; the baseline projection is
+  //    KB-derived, so this preserves real content without fabricating anything.
+  cvData.skills = sanitizeSkills(cvData.skills);
+  if (cvData.leadership.length === 0 && (input.baselineCvData?.leadership?.length ?? 0) > 0) {
+    cvData.leadership = input.baselineCvData!.leadership;
+  }
+
   const truthfulness = verifyTruthfulness(cvData, kb);
   const diff = input.baselineCvData
     ? computeDiff(input.baselineCvData, cvData)
