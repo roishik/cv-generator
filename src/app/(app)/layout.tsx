@@ -12,9 +12,11 @@ import { AppTopBar } from "@/components/shell/app-top-bar";
  *   │                    │                                       │
  *   └────────────────────┴───────────────────────────────────────┘
  *
- * `requireSession()` redirects to /sign-in if the user is not authenticated.
- * The middleware handles most redirects; the layout is a secondary guard for
- * RSC renders that bypass the middleware matcher (e.g. parallel route segments).
+ * `requireSession()` is the primary auth guard for the whole (app) segment:
+ * it calls auth() and redirects to /sign-in when there is no valid session.
+ * NOTE: a session-token cookie that cannot be decoded (e.g. a stale cookie left
+ * over from a previous session-strategy) yields no session here and redirects to
+ * /sign-in?callbackUrl=… — re-signing in overwrites the bad cookie and recovers.
  *
  * CV preview pane (when rendered) always uses .cv-paper wrapper.
  */
