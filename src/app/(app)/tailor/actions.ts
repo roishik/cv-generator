@@ -19,14 +19,12 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth/guards";
 import { withUser } from "@/lib/db/rls";
-import { artifacts, cvDocuments, jobDescriptions, providerKeys } from "@/lib/db/schema";
+import { artifacts, cvDocuments, jobDescriptions } from "@/lib/db/schema";
 import { CvData, TemplateId } from "@/lib/schemas/cv-data";
-import { decryptKey } from "@/lib/crypto/envelope";
-import type { ProviderId } from "@/lib/ai/provider";
+import { resolveProvider } from "@/lib/providers/resolve-provider";
 import { renderCvToPdf } from "@/lib/pdf/render-pdf";
 import { runQaChecks } from "@/lib/qa/assertions";
 import { getStorage } from "@/lib/storage/local-fs";
-import { getEnv } from "@/env";
 import { tailorToJob, type TailorToJobResult } from "@/lib/tailor/pipeline";
 import {
   loadKnowledgeBase,
@@ -55,38 +53,9 @@ const ReRenderInput = z.object({
   templateId: TemplateId.optional(),
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Provider resolution (BYOK): load + decrypt the user's key for a real provider.
-// Mock needs no key. Never logs the plaintext.
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function resolveProvider(
-  userId: string,
-): Promise<{ provider: ProviderId; apiKey?: string }> {
-  const envProvider = getEnv().AI_PROVIDER as ProviderId;
-  if (envProvider === "mock") return { provider: "mock" };
-
-  const key = await withUser(userId, async (tx) => {
-    const [row] = await tx
-      .select()
-      .from(providerKeys)
-      .where(and(eq(providerKeys.userId, userId), eq(providerKeys.provider, envProvider)))
-      .limit(1);
-    return row;
-  });
-  if (!key) {
-    throw new Error(
-      `No ${envProvider} API key on file. Add one in Settings before tailoring.`,
-    );
-  }
-  const apiKey = decryptKey({
-    ciphertext: Buffer.from(key.ciphertext).toString("base64"),
-    iv: Buffer.from(key.iv).toString("base64"),
-    authTag: Buffer.from(key.authTag).toString("base64"),
-    keyVersion: key.keyVersion,
-  });
-  return { provider: envProvider, apiKey };
-}
+// Provider resolution (BYOK) lives in a shared server helper so the onboarding
+// extraction path and this tailoring path stay in lockstep. See
+// lib/providers/resolve-provider.ts.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Actions

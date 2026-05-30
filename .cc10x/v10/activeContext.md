@@ -1,23 +1,21 @@
 # Active Context
 
 ## Current Focus
-M2 complete: Editorial Studio design system implemented — tokens, typography, app shell, styleguide, CV paper wrapper.
+M9 complete: Landing page, onboarding wizard, dashboard, settings/BYOK — all wired to real backend, build green.
 
 ## Recent Changes
-- [BUILD-START: wf:wf-20260529-m2-design]
-- Implemented full Editorial Studio tokens in globals.css (Tailwind v4 @theme)
-- Added Fraunces (variable serif) + Inter fonts via next/font/google
-- Built authenticated app shell: (app)/layout.tsx, NavRail, TopBar
-- Created shared primitives: PageHeader, Section, EmptyState, LoadingSkeletons, CvPaper, PreviewFrame
-- Built comprehensive /styleguide page showing all tokens + components
-- Fixed dialog.tsx: React.ElementRef → React.ComponentRef
-- Updated landing page with Editorial Studio tokens
-- pnpm typecheck, lint, build all pass
+- [BUILD-START: wf:wf-20260529-m9-ui]
+- Built polished landing page (hero, how-it-works, two-designs, BYOK, CTA)
+- Built 3-step onboarding wizard: upload/paste → extraction progress → BYOK key
+- Built dashboard with listTailoredVersions, Suspense skeletons, empty state
+- Built Settings/BYOK: saveProviderKey, deleteProviderKey, setActiveProvider, ByokKeysPanel
+- Added DocumentList, OnboardingWizard, ByokKeysPanel product components
+- Commit ad569a9 pushed to origin/main
 
 ## Next Steps
-1. M3: Render engine — Sidebar.tsx, Clean.tsx, themes, css.ts, render.ts, self-hosted fonts
-2. M4: PDF + auto-fit (browser-pool, render-pdf, measure, fit, qa)
-3. M5: Database + RLS (docker-compose, Drizzle schema, migrations, RLS policies)
+1. M10: Full tailor workspace — split-pane JD input + live A4 preview + diff viewer
+2. M10: Knowledge-base editor (profile editor with inline edit, drag reorder)
+3. M11: Hardening — rate limiting, log redaction, e2e tests
 
 ## Decisions
 - [BUILD-START: wf:wf-20260529-scaffold01]

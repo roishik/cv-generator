@@ -32,7 +32,7 @@ import { getStorage } from "@/lib/storage/local-fs";
 import { extractTextFromBuffer, MIN_TEXT_LENGTH } from "@/lib/parse/extract-text";
 import { extractProfile } from "@/lib/ai/pipeline";
 import { createProvider } from "@/lib/ai/factory";
-import { getEnv } from "@/env";
+import { resolveProvider } from "@/lib/providers/resolve-provider";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Input validation
@@ -228,9 +228,14 @@ async function runExtractionWithCache(
     };
   }
 
-  // Cache miss — call the LLM provider.
-  const env = getEnv();
-  const provider = createProvider({ provider: env.AI_PROVIDER });
+  // Cache miss — call the LLM provider. Resolve the user's BYOK key (mock needs
+  // none) the same way the tailoring path does, so a configured real provider
+  // actually uses the stored, decrypted key instead of throwing "requires a key".
+  const { provider: providerId, apiKey } = await resolveProvider(userId);
+  const provider = createProvider({
+    provider: providerId,
+    ...(apiKey ? { apiKey } : {}),
+  });
   const { knowledgeBase } = await extractProfile(provider, rawText, {
     idFor: () => randomUUID(),
   });
