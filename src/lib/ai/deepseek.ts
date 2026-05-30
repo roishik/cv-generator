@@ -23,6 +23,7 @@ import {
 } from "./prompts/extraction";
 import { TAILOR_SYSTEM_PROMPT, buildTailorUserPrompt } from "./prompts/tailor";
 import { parseWithRepair } from "./structured";
+import { toStrictJsonSchema } from "./strict-schema";
 
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 
@@ -76,7 +77,7 @@ export class DeepSeekProvider implements LLMProvider {
         json_schema: {
           name: schema.name,
           description: schema.description,
-          schema: schema.schema as Record<string, unknown>,
+          schema: toStrictJsonSchema(schema.schema) as Record<string, unknown>,
           strict: true,
         },
       },

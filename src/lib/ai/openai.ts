@@ -22,6 +22,7 @@ import {
 } from "./prompts/extraction";
 import { TAILOR_SYSTEM_PROMPT, buildTailorUserPrompt } from "./prompts/tailor";
 import { parseWithRepair } from "./structured";
+import { toStrictJsonSchema } from "./strict-schema";
 
 export interface OpenAIOptions {
   apiKey: string;
@@ -63,7 +64,7 @@ export class OpenAIProvider implements LLMProvider {
         json_schema: {
           name: schema.name,
           description: schema.description,
-          schema: schema.schema as Record<string, unknown>,
+          schema: toStrictJsonSchema(schema.schema) as Record<string, unknown>,
           strict: true,
         },
       },
