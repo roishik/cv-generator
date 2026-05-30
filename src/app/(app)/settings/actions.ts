@@ -18,7 +18,7 @@ import { encryptKey, keyLast4 } from "@/lib/crypto/envelope";
 import { validateProviderKey } from "@/lib/ai/factory";
 import type { ProviderId } from "@/lib/ai/provider";
 
-const PROVIDER_IDS = ["anthropic", "openai", "google"] as const;
+const PROVIDER_IDS = ["anthropic", "openai", "google", "deepseek"] as const;
 const ProviderIdSchema = z.enum(PROVIDER_IDS);
 
 // ─────────────────────────────────────────────────────────────────────────────

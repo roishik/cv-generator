@@ -9,6 +9,7 @@ import { MockProvider } from "./mock";
 import { AnthropicProvider } from "./anthropic";
 import { OpenAIProvider } from "./openai";
 import { GoogleProvider } from "./google";
+import { DeepSeekProvider } from "./deepseek";
 
 export interface CreateProviderInput {
   provider: ProviderId;
@@ -39,6 +40,11 @@ export function createProvider(input: CreateProviderInput): LLMProvider {
       });
     case "google":
       return new GoogleProvider({
+        apiKey: requireKey(input),
+        ...(input.model ? { model: input.model } : {}),
+      });
+    case "deepseek":
+      return new DeepSeekProvider({
         apiKey: requireKey(input),
         ...(input.model ? { model: input.model } : {}),
       });

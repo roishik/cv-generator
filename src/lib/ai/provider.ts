@@ -11,7 +11,7 @@ import type {
 } from "@/lib/schemas/knowledge-base";
 import type { TemplateId } from "@/lib/schemas/cv-data";
 
-export type ProviderId = "anthropic" | "openai" | "google" | "mock";
+export type ProviderId = "anthropic" | "openai" | "google" | "deepseek" | "mock";
 
 export interface ValidateKeyResult {
   ok: boolean;
@@ -43,13 +43,14 @@ export interface LLMProvider {
   tailor(input: TailorInput): Promise<TailorResult>;
 }
 
-/** Default model ids per provider. Override via constructor options.
- * NOTE: these are best-effort current mid-tier defaults; confirm exact ids
- * against provider docs before production (tracked in openIssues). */
+/** Default model ids per provider. Override via constructor options or env.
+ * NOTE: model id strings are best-effort; confirm exact ids against each
+ * provider's API docs. All are overridable via env vars or constructor args. */
 export const DEFAULT_MODELS = {
-  anthropic: "claude-sonnet-4-5",
-  openai: "gpt-4.1",
+  anthropic: "claude-sonnet-4-6",
+  openai: "gpt-5.4",
   google: "gemini-2.5-pro",
+  deepseek: "deepseek-v4-pro",
 } as const;
 
 export class SchemaValidationError extends Error {

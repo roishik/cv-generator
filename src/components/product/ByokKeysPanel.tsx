@@ -22,23 +22,29 @@ const PROVIDERS = [
     id: "anthropic",
     label: "Anthropic",
     hint: "Begins with sk-ant-…",
-    models: ["claude-sonnet-4-5", "claude-opus-4-5", "claude-haiku-3-5"],
+    models: ["claude-sonnet-4-6", "claude-opus-4-5", "claude-haiku-3-5"],
   },
   {
     id: "openai",
     label: "OpenAI",
     hint: "Begins with sk-…",
-    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+    models: ["gpt-5.4", "gpt-4o", "gpt-4o-mini"],
   },
   {
     id: "google",
     label: "Google",
     hint: "Begins with AIza…",
-    models: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash"],
+    models: ["gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro"],
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    hint: "Begins with sk-…",
+    models: ["deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"],
   },
 ] as const;
 
-type ProviderId = "anthropic" | "openai" | "google";
+type ProviderId = "anthropic" | "openai" | "google" | "deepseek";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mock active badge

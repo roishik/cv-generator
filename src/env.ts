@@ -49,11 +49,13 @@ const envSchema = z
 
     // ── AI ────────────────────────────────────────────────────────────────────
     AI_PROVIDER: z
-      .enum(["mock", "anthropic", "openai", "google"])
+      .enum(["mock", "anthropic", "openai", "google", "deepseek"])
       .default("mock"),
     ANTHROPIC_DEFAULT_MODEL: z.string().optional(),
     OPENAI_DEFAULT_MODEL: z.string().optional(),
     GOOGLE_DEFAULT_MODEL: z.string().optional(),
+    DEEPSEEK_API_KEY: z.string().optional(),
+    DEEPSEEK_DEFAULT_MODEL: z.string().optional(),
 
     // ── PDF ───────────────────────────────────────────────────────────────────
     PLAYWRIGHT_CHROMIUM: z.string().optional(),

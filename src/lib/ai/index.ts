@@ -8,3 +8,4 @@ export { MockProvider } from "./mock";
 export { AnthropicProvider } from "./anthropic";
 export { OpenAIProvider } from "./openai";
 export { GoogleProvider } from "./google";
+export { DeepSeekProvider } from "./deepseek";

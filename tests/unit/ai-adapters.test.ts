@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AnthropicProvider } from "@/lib/ai/anthropic";
 import { OpenAIProvider } from "@/lib/ai/openai";
 import { GoogleProvider } from "@/lib/ai/google";
+import { DeepSeekProvider } from "@/lib/ai/deepseek";
 import { createProvider, validateProviderKey } from "@/lib/ai/factory";
 import { ExtractionResult, TailorResult } from "@/lib/schemas/llm-contracts";
 import { SchemaValidationError } from "@/lib/ai/provider";
@@ -157,6 +158,65 @@ describe("GoogleProvider adapter", () => {
   });
 });
 
+describe("DeepSeekProvider adapter", () => {
+  // DeepSeek reuses the OpenAI SDK client path (OpenAI-compatible API).
+  function stub(provider: DeepSeekProvider, payload: object) {
+    const client = (
+      provider as unknown as { client: { chat: { completions: { create: unknown } } } }
+    ).client;
+    client.chat.completions.create = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify(payload) } }],
+    });
+  }
+
+  it("parses json_schema content into a valid ExtractionResult", async () => {
+    const p = new DeepSeekProvider({ apiKey: "sk-test" });
+    stub(p, VALID_EXTRACTION);
+    const res = await p.extractProfile({ rawText: SAMPLE_RESUME_TEXT });
+    expect(() => ExtractionResult.parse(res)).not.toThrow();
+  });
+
+  it("parses tailor content into a valid TailorResult", async () => {
+    const p = new DeepSeekProvider({ apiKey: "sk-test" });
+    stub(p, VALID_TAILOR);
+    const res = await p.tailor({
+      knowledgeBase: SAMPLE_KB,
+      jdText: SAMPLE_JD,
+      templateId: "clean",
+    });
+    expect(() => TailorResult.parse(res)).not.toThrow();
+  });
+
+  it("repairs once on a bad first response, then succeeds", async () => {
+    const p = new DeepSeekProvider({ apiKey: "sk-test" });
+    const client = (p as unknown as { client: { chat: { completions: { create: unknown } } } }).client;
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ bad: true }) } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify(VALID_EXTRACTION) } }] });
+    client.chat.completions.create = create;
+    const res = await p.extractProfile({ rawText: "x" });
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(res.header.name).toBe("Dana Whitfield");
+  });
+
+  it("hard-errors after the repair retry also fails", async () => {
+    const p = new DeepSeekProvider({ apiKey: "sk-test" });
+    const client = (p as unknown as { client: { chat: { completions: { create: unknown } } } }).client;
+    client.chat.completions.create = vi
+      .fn()
+      .mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ bad: true }) } }] });
+    await expect(p.extractProfile({ rawText: "x" })).rejects.toBeInstanceOf(
+      SchemaValidationError,
+    );
+  });
+
+  it("has id='deepseek'", () => {
+    const p = new DeepSeekProvider({ apiKey: "sk-test" });
+    expect(p.id).toBe("deepseek");
+  });
+});
+
 describe("factory", () => {
   it("creates a MockProvider for 'mock' with no key", () => {
     expect(createProvider({ provider: "mock" })).toBeInstanceOf(MockProvider);
@@ -164,6 +224,23 @@ describe("factory", () => {
 
   it("throws when a real provider is requested without a key", () => {
     expect(() => createProvider({ provider: "anthropic" })).toThrow(/requires an API key/);
+  });
+
+  it("throws when deepseek is requested without a key", () => {
+    expect(() => createProvider({ provider: "deepseek" })).toThrow(/requires an API key/);
+  });
+
+  it("creates a DeepSeekProvider when given a key", () => {
+    expect(
+      createProvider({ provider: "deepseek", apiKey: "sk-test" }),
+    ).toBeInstanceOf(DeepSeekProvider);
+  });
+
+  it("supports all four real providers: anthropic, openai, google, deepseek", () => {
+    const providers = ["anthropic", "openai", "google", "deepseek"] as const;
+    for (const p of providers) {
+      expect(() => createProvider({ provider: p, apiKey: "sk-test" })).not.toThrow();
+    }
   });
 
   it("validateProviderKey is a no-op success for mock", async () => {
