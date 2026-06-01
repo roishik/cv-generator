@@ -40,6 +40,8 @@ const baseline: CvData = {
   education: [],
   leadership: [{ kbLeadershipId: LEAD_ID, name: "Locals App", description: "Built an app for local businesses." }],
   languages: [],
+  photoUrl: "data:image/png;base64,AAAA",
+  sectionTitles: { leadership: "Side Projects" },
 };
 
 /** A provider that drops leadership and emits a header-as-value soft skill — the exact failure we saw live. */
@@ -88,5 +90,16 @@ describe("tailorCv — section preservation", () => {
       baselineCvData: baseline,
     });
     expect(out.cvData.skills.soft).toEqual([]);
+  });
+
+  it("carries the photo and custom section titles forward from the baseline", async () => {
+    const out = await tailorCv(makeBadProvider(), {
+      knowledgeBase: kb,
+      jobDescription: "Looking for a builder PM for our platform team.",
+      templateId: "sidebar",
+      baselineCvData: baseline,
+    });
+    expect(out.cvData.photoUrl).toBe("data:image/png;base64,AAAA");
+    expect(out.cvData.sectionTitles?.leadership).toBe("Side Projects");
   });
 });

@@ -380,6 +380,44 @@ export async function getWorkspaceBaseline(): Promise<WorkspaceBaseline> {
   });
 }
 
+const SetPhotoInput = z.object({
+  /** Small image data URL (client-resized). Capped to keep cv_data lean. */
+  dataUrl: z.string().min(1).max(3_000_000),
+});
+
+/**
+ * Set the user's profile photo on their baseline CvData (the source of truth).
+ * Every future tailored CV inherits it via the baseline carry-forward in
+ * tailorCv, so the photo persists across tailoring + PDF export. RLS-scoped.
+ */
+export async function setProfilePhoto(
+  raw: z.input<typeof SetPhotoInput>,
+): Promise<{ ok: true }> {
+  const userId = await requireSession();
+  const { dataUrl } = SetPhotoInput.parse(raw);
+  if (!/^data:image\/(png|jpe?g|webp);base64,/.test(dataUrl)) {
+    throw new Error("Photo must be a PNG, JPEG, or WebP image.");
+  }
+  await withUser(userId, async (tx) => {
+    const [baseline] = await tx
+      .select()
+      .from(cvDocuments)
+      .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.kind, "baseline")))
+      .orderBy(desc(cvDocuments.version))
+      .limit(1);
+    if (!baseline) {
+      throw new Error("No baseline CV yet — upload a resume first.");
+    }
+    const data = CvData.parse(baseline.cvData);
+    data.photoUrl = dataUrl;
+    await tx
+      .update(cvDocuments)
+      .set({ cvData: data as unknown as Record<string, unknown> })
+      .where(eq(cvDocuments.id, baseline.id));
+  });
+  return { ok: true };
+}
+
 /**
  * Deterministic template recommendation for a pasted JD (heuristic, 0 LLM).
  * Drives the "Detected role / recommended template" chips before generation.

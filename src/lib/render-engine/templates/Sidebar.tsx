@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { CvData, ThemeTokens } from "@/lib/schemas/cv-data";
+import { sectionTitle } from "@/lib/schemas/cv-data";
 import { EmailIcon, PhoneIcon, LocationIcon, LinkedinIcon } from "./shared/icons";
 
 // Type 1 — navy sidebar (was cv-main.html). Reproduced 1:1, data-driven.
@@ -19,9 +20,10 @@ export function Sidebar({ data }: { data: CvData; theme: ThemeTokens }) {
   return (
     <div className="cv-page">
       <aside className="sidebar">
-        {/* Photo (circular) with graceful monogram fallback */}
+        {/* Photo (circular) with graceful monogram fallback.
+            data-field="photo" makes it click-to-upload in the live workspace. */}
         <div className="sidebar-photo">
-          <div className="photo-circle">
+          <div className="photo-circle" data-field="photo">
             {data.photoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- render engine emits static HTML for the PDF/preview pipeline; next/image is not applicable here.
               <img src={data.photoUrl} alt={header.name} />
@@ -33,7 +35,9 @@ export function Sidebar({ data }: { data: CvData; theme: ThemeTokens }) {
 
         {/* Contact */}
         <div className="sidebar-section" data-section="contact">
-          <div className="sidebar-section-header">Contact</div>
+          <div className="sidebar-section-header" data-field="sectionTitle">
+            {sectionTitle(data, "contact")}
+          </div>
           {contact.email && (
             <div className="contact-item">
               <EmailIcon />
@@ -73,7 +77,9 @@ export function Sidebar({ data }: { data: CvData; theme: ThemeTokens }) {
           <>
             <div className="sidebar-divider" />
             <div className="sidebar-section" data-section="skills">
-              <div className="sidebar-section-header">Professional Skills</div>
+              <div className="sidebar-section-header" data-field="sectionTitle">
+                {sectionTitle(data, "skills")}
+              </div>
               <div data-field="professional">
                 {skills.professional.map((s, i) => (
                   <div className="skill-item" key={i}>
@@ -93,7 +99,9 @@ export function Sidebar({ data }: { data: CvData; theme: ThemeTokens }) {
           <>
             <div className="sidebar-divider" />
             <div className="sidebar-section" data-section="soft-skills">
-              <div className="sidebar-section-header">Soft Skills</div>
+              <div className="sidebar-section-header" data-field="sectionTitle">
+                {sectionTitle(data, "soft")}
+              </div>
               <div data-field="soft">
                 {skills.soft.map((s, i) => (
                   <div className="skill-item" key={i}>
@@ -113,7 +121,9 @@ export function Sidebar({ data }: { data: CvData; theme: ThemeTokens }) {
           <>
             <div className="sidebar-divider" />
             <div className="sidebar-section" data-section="leadership" style={{ flex: 1 }}>
-              <div className="sidebar-section-header">Leadership &amp; Impact</div>
+              <div className="sidebar-section-header" data-field="sectionTitle">
+                {sectionTitle(data, "leadership")}
+              </div>
               {leadership.map((l, i) => (
                 <div className="project-item" key={i} data-leadership-index={i}>
                   <div className="project-name" data-field="name">
@@ -157,7 +167,9 @@ export function Sidebar({ data }: { data: CvData; theme: ThemeTokens }) {
         <div className="main-divider" />
 
         <section className="experience-section" data-section="experience">
-          <div className="main-section-header">Experience</div>
+          <div className="main-section-header" data-field="sectionTitle">
+            {sectionTitle(data, "experience")}
+          </div>
           <div className="experience-list">
             {experience.map((exp, i) => (
               <div className="experience-entry" key={i} data-exp-index={i}>
@@ -188,7 +200,9 @@ export function Sidebar({ data }: { data: CvData; theme: ThemeTokens }) {
         <div className="main-divider" />
 
         <section className="education-section" data-section="education">
-          <div className="main-section-header">Education</div>
+          <div className="main-section-header" data-field="sectionTitle">
+            {sectionTitle(data, "education")}
+          </div>
           {education.map((edu, i) => (
             <div className="education-entry" key={i} data-edu-index={i}>
               <div className="edu-institution" data-field="institution">

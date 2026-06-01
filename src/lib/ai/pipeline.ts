@@ -125,6 +125,15 @@ export async function tailorCv(
   if (cvData.leadership.length === 0 && (input.baselineCvData?.leadership?.length ?? 0) > 0) {
     cvData.leadership = input.baselineCvData!.leadership;
   }
+  // The profile photo is a user asset, never an LLM output — always inherit it
+  // from the baseline so every tailored CV (and its PDF) keeps the same photo.
+  if (!cvData.photoUrl && input.baselineCvData?.photoUrl) {
+    cvData.photoUrl = input.baselineCvData.photoUrl;
+  }
+  // Likewise carry forward any custom section headings the user set on the baseline.
+  if (!cvData.sectionTitles && input.baselineCvData?.sectionTitles) {
+    cvData.sectionTitles = input.baselineCvData.sectionTitles;
+  }
 
   const truthfulness = verifyTruthfulness(cvData, kb);
   const diff = input.baselineCvData

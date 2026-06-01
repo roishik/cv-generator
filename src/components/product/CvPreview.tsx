@@ -51,12 +51,42 @@ export interface CvPreviewProps {
   onMeasure?: (contentHeightPx: number) => void;
 }
 
+/** data-section value → CvData sectionTitles key. */
+function sectionKeyFor(section: string | null): string | null {
+  switch (section) {
+    case "contact":
+      return "contact";
+    case "skills":
+      return "skills";
+    case "soft-skills":
+      return "soft";
+    case "leadership":
+      return "leadership";
+    case "experience":
+      return "experience";
+    case "education":
+      return "education";
+    default:
+      return null;
+  }
+}
+
 /** Map a DOM node (carrying data-* hooks) to a dotted CvData path, if any. */
 function pathForNode(el: Element): string | null {
   const field = el.closest<HTMLElement>("[data-field]");
   if (!field) return null;
   const name = field.getAttribute("data-field");
   if (!name) return null;
+
+  // Profile photo → click-to-upload (handled specially by the workspace).
+  if (name === "photo") return "photoUrl";
+
+  // Editable section heading (e.g. "Leadership & Impact").
+  if (name === "sectionTitle") {
+    const section = field.closest<HTMLElement>("[data-section]")?.getAttribute("data-section") ?? null;
+    const key = sectionKeyFor(section);
+    return key ? `sectionTitles.${key}` : null;
+  }
 
   const exp = field.closest<HTMLElement>("[data-exp-index]");
   if (exp) {
@@ -76,10 +106,26 @@ function pathForNode(el: Element): string | null {
   const edu = field.closest<HTMLElement>("[data-edu-index]");
   if (edu) return `education[${edu.getAttribute("data-edu-index")}].${name}`;
 
+  // Leadership entries (sidebar left rail) — check BEFORE the generic name/title
+  // fallbacks so a leadership "name" doesn't mis-map to header.name.
+  const lead = field.closest<HTMLElement>("[data-leadership-index]");
+  if (lead) {
+    const i = lead.getAttribute("data-leadership-index");
+    if (name === "name" || name === "description" || name === "url") {
+      return `leadership[${i}].${name}`;
+    }
+  }
+
+  // Contact items (sidebar left rail).
+  if (name === "email" || name === "phone" || name === "location" || name === "linkedin") {
+    return `contact.${name}`;
+  }
+
   if (name === "professional" || name === "soft") return `skills.${name}`;
   if (name === "summary") return "summary";
   if (name === "title") return "header.title";
   if (name === "name") return "header.name";
+  if (name === "website") return "header.website";
   return name;
 }
 
@@ -193,8 +239,11 @@ export function CvPreview({
     });
     if (onFieldClick) {
       doc.querySelectorAll<HTMLElement>("[data-field]").forEach((n) => {
-        n.style.cursor = "text";
+        n.style.cursor = n.getAttribute("data-field") === "photo" ? "pointer" : "text";
       });
+      // Hint that the photo is clickable.
+      const photo = doc.querySelector<HTMLElement>('[data-field="photo"]');
+      if (photo) photo.title = "Click to upload a photo";
     }
     if (!showChanges) return;
     for (const [path, kind] of Object.entries(changedPaths)) {

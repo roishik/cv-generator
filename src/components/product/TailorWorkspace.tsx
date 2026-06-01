@@ -60,6 +60,7 @@ import {
   recommendTemplateForJd,
   verifyVersionTruthfulness,
   recomputeDiff,
+  setProfilePhoto,
 } from "@/app/(app)/tailor/actions";
 
 export interface TailorWorkspaceInitial {
@@ -91,7 +92,8 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
   } | null>(null);
 
   const [docId, setDocId] = React.useState<string | null>(initial.cvDocumentId);
-  const [baseline] = React.useState<CvData | null>(initial.baseline);
+  const [baseline, setBaseline] = React.useState<CvData | null>(initial.baseline);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
   const [tailored, setTailored] = React.useState<CvData | null>(initial.tailored);
   const [diff, setDiff] = React.useState<StructuredDiff | null>(initial.diff);
   const [truthfulness, setTruthfulness] = React.useState<TruthfulnessReport | null>(
@@ -216,9 +218,64 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
     [docId, templateId],
   );
 
-  // ── Click a field on the preview → open the inline editor ──
+  // ── Apply a new photo data URL to baseline + current view, persist, re-render ──
+  const applyPhoto = React.useCallback(
+    async (dataUrl: string) => {
+      // Update local previews immediately (baseline is the source of truth).
+      setBaseline((b) => (b ? { ...b, photoUrl: dataUrl } : b));
+      const nextTailored = tailored ? { ...tailored, photoUrl: dataUrl } : null;
+      if (nextTailored) setTailored(nextTailored);
+      try {
+        await setProfilePhoto({ dataUrl }); // persist on baseline (carry-forward source)
+        // If a tailored doc exists, re-render its PDF so the export includes the photo.
+        if (nextTailored && docId) await persistEdit(nextTailored);
+        toast.success("Photo updated.");
+      } catch (e) {
+        toast.error((e as Error).message ?? "Couldn't save the photo.");
+      }
+    },
+    [tailored, docId, persistEdit],
+  );
+
+  // ── Resize a picked image to a small square data URL (client-side, no upload server) ──
+  const onPhotoFile = React.useCallback(
+    (file: File) => {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please choose an image file.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const SIZE = 360; // square, matches the circular crop
+          const canvas = document.createElement("canvas");
+          canvas.width = SIZE;
+          canvas.height = SIZE;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+          // center-crop to square, then scale down
+          const side = Math.min(img.width, img.height);
+          const sx = (img.width - side) / 2;
+          const sy = (img.height - side) / 2;
+          ctx.drawImage(img, sx, sy, side, side, 0, 0, SIZE, SIZE);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          void applyPhoto(dataUrl);
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    },
+    [applyPhoto],
+  );
+
+  // ── Click a field on the preview → open the inline editor (or photo picker) ──
   const handleFieldClick = React.useCallback(
     (path: string) => {
+      if (path === "photoUrl") {
+        photoInputRef.current?.click();
+        return;
+      }
       const data = view === "tailored" && tailored ? tailored : baseline;
       if (!data) return;
       const target = readPath(data, path);
@@ -478,6 +535,19 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
           Click any field to edit
         </div>
       </div>
+
+      {/* Hidden photo picker (triggered by clicking the sidebar photo) */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onPhotoFile(f);
+          e.target.value = ""; // allow re-picking the same file
+        }}
+      />
 
       {/* Preview body */}
       <div className="min-h-0 flex-1 overflow-auto">

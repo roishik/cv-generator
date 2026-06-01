@@ -7,7 +7,15 @@
  * are edited as a single newline-joined block (one skill per line).
  */
 
-import type { CvData } from "@/lib/schemas/cv-data";
+import type { CvData, SectionKey } from "@/lib/schemas/cv-data";
+import { DEFAULT_SECTION_TITLES } from "@/lib/schemas/cv-data";
+
+const CONTACT_LABELS: Record<string, string> = {
+  email: "Email",
+  phone: "Phone",
+  location: "Location",
+  linkedin: "LinkedIn",
+};
 
 export interface PathTarget {
   /** A human label for the editor header. */
@@ -30,7 +38,42 @@ export function readPath(data: CvData, path: string): PathTarget | null {
   if (path === "header.name") {
     return { label: "Name", value: data.header.name, multiline: false, isList: false };
   }
-  let m = path.match(/^skills\.(professional|soft)$/);
+  if (path === "header.website") {
+    return { label: "Website", value: data.header.website ?? "", multiline: false, isList: false };
+  }
+  let m = path.match(/^contact\.(email|phone|location|linkedin)$/);
+  if (m) {
+    const key = m[1] as keyof CvData["contact"];
+    return {
+      label: CONTACT_LABELS[key] ?? key,
+      value: (data.contact[key] as string | undefined) ?? "",
+      multiline: false,
+      isList: false,
+    };
+  }
+  m = path.match(/^sectionTitles\.(\w+)$/);
+  if (m) {
+    const key = m[1] as SectionKey;
+    const fallback = DEFAULT_SECTION_TITLES[key] ?? "";
+    return {
+      label: "Section heading",
+      value: data.sectionTitles?.[key] ?? fallback,
+      multiline: false,
+      isList: false,
+    };
+  }
+  m = path.match(/^leadership\[(\d+)\]\.(name|description|url)$/);
+  if (m) {
+    const lead = data.leadership[Number(m[1])];
+    const key = m[2] as "name" | "description" | "url";
+    return {
+      label: `${lead?.name ?? "Leadership"} · ${key}`,
+      value: (lead?.[key] as string | undefined) ?? "",
+      multiline: key === "description",
+      isList: false,
+    };
+  }
+  m = path.match(/^skills\.(professional|soft)$/);
   if (m) {
     const cat = m[1] as "professional" | "soft";
     return {
@@ -86,7 +129,39 @@ export function writePath(data: CvData, path: string, raw: string): CvData {
     next.header.name = raw;
     return next;
   }
-  let m = path.match(/^skills\.(professional|soft)$/);
+  if (path === "header.website") {
+    next.header.website = raw.trim() || undefined;
+    return next;
+  }
+  let m = path.match(/^contact\.(email|phone|location|linkedin)$/);
+  if (m) {
+    const key = m[1] as "email" | "phone" | "location" | "linkedin";
+    const v = raw.trim();
+    if (v) next.contact[key] = v;
+    else delete next.contact[key];
+    return next;
+  }
+  m = path.match(/^sectionTitles\.(\w+)$/);
+  if (m) {
+    const key = m[1] as SectionKey;
+    const v = raw.trim();
+    next.sectionTitles = { ...(next.sectionTitles ?? {}) };
+    // Empty / equal-to-default → clear the override so the default shows.
+    if (!v || v === DEFAULT_SECTION_TITLES[key]) delete next.sectionTitles[key];
+    else next.sectionTitles[key] = v;
+    return next;
+  }
+  m = path.match(/^leadership\[(\d+)\]\.(name|description|url)$/);
+  if (m) {
+    const i = Number(m[1]);
+    const key = m[2] as "name" | "description" | "url";
+    if (next.leadership[i]) {
+      if (key === "url") next.leadership[i]!.url = raw.trim() || undefined;
+      else next.leadership[i]![key] = raw;
+    }
+    return next;
+  }
+  m = path.match(/^skills\.(professional|soft)$/);
   if (m) {
     const cat = m[1] as "professional" | "soft";
     next.skills[cat] = raw

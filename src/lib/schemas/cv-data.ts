@@ -62,6 +62,42 @@ export const CvLeadership = z.object({
 });
 export type CvLeadership = z.infer<typeof CvLeadership>;
 
+// Editable section headings. Keys are stable; labels default to DEFAULT_SECTION_TITLES
+// and may be overridden per-CV so users can rename "Leadership & Impact" etc.
+export const SECTION_KEYS = [
+  "contact",
+  "skills",
+  "soft",
+  "leadership",
+  "experience",
+  "education",
+] as const;
+export type SectionKey = (typeof SECTION_KEYS)[number];
+
+export const DEFAULT_SECTION_TITLES: Record<SectionKey, string> = {
+  contact: "Contact",
+  skills: "Professional Skills",
+  soft: "Soft Skills",
+  leadership: "Leadership & Impact",
+  experience: "Experience",
+  education: "Education",
+};
+
+export const CvSectionTitles = z.object({
+  contact: z.string().optional(),
+  skills: z.string().optional(),
+  soft: z.string().optional(),
+  leadership: z.string().optional(),
+  experience: z.string().optional(),
+  education: z.string().optional(),
+});
+export type CvSectionTitles = z.infer<typeof CvSectionTitles>;
+
+/** Resolve a section's heading: custom label if set, else the default. */
+export function sectionTitle(data: CvData, key: SectionKey): string {
+  return data.sectionTitles?.[key]?.trim() || DEFAULT_SECTION_TITLES[key];
+}
+
 export const CvData = z.object({
   schemaVersion: z.literal(1),
   header: CvHeader,
@@ -73,6 +109,7 @@ export const CvData = z.object({
   leadership: z.array(CvLeadership).default([]), // rendered by 'sidebar' only
   languages: z.array(CvLanguage).default([]), // rendered by 'clean' only
   photoUrl: z.string().optional(), // 'sidebar' circular photo; monogram fallback if absent
+  sectionTitles: CvSectionTitles.optional(), // per-CV section heading overrides
 });
 export type CvData = z.infer<typeof CvData>;
 
