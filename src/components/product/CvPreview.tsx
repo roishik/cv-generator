@@ -150,13 +150,41 @@ export function CvPreview({
     [theme, templateId],
   );
 
-  // Bootstrap the iframe document once: inject reset + fonts + a mount node.
+  // Bootstrap the iframe document: inject reset + fonts + a mount node.
   const onIframeLoad = React.useCallback(() => {
     const doc = iframeRef.current?.contentDocument;
     if (!doc) return;
     const root = doc.getElementById("cv-root");
     if (root) setMountEl(root);
   }, []);
+
+  // Robust mount: a srcDoc iframe parses synchronously, so its `load` event can
+  // fire BEFORE React attaches onLoad — leaving the portal unmounted (blank
+  // preview). Poll briefly for #cv-root so the mount is deterministic regardless
+  // of that race.
+  React.useEffect(() => {
+    if (mountEl) return;
+    let stopped = false;
+    const tryMount = () => {
+      if (stopped) return true;
+      const root = iframeRef.current?.contentDocument?.getElementById("cv-root");
+      if (root) {
+        setMountEl(root);
+        return true;
+      }
+      return false;
+    };
+    if (tryMount()) return;
+    const interval = window.setInterval(() => {
+      if (tryMount()) window.clearInterval(interval);
+    }, 30);
+    const timeout = window.setTimeout(() => window.clearInterval(interval), 3000);
+    return () => {
+      stopped = true;
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+  }, [mountEl]);
 
   // Re-inject the template CSS whenever the theme/template changes.
   React.useEffect(() => {
