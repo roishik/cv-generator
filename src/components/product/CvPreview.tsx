@@ -28,6 +28,7 @@ import { Clean } from "@/lib/render-engine/templates/Clean";
 import { buildCss } from "@/lib/render-engine/css";
 import { fontFaceCss } from "@/lib/render-engine/fonts/fonts";
 import { defaultThemeFor } from "@/lib/render-engine/themes/registry";
+import { buildFitLadder } from "@/lib/render-engine/fit";
 import type { CvData, TemplateId, ThemeTokens } from "@/lib/schemas/cv-data";
 
 const A4_W = 794;
@@ -150,6 +151,26 @@ export function CvPreview({
     [theme, templateId],
   );
 
+  // Client-side auto-fit: walk the SAME deterministic ladder the PDF uses
+  // (tighten gaps → line-height → font) so the live preview actually fits one
+  // page instead of just reporting overflow. `fitRung` advances until the
+  // measured content fits, or the ladder is exhausted (honest overflow).
+  const ladder = React.useMemo(() => buildFitLadder(resolvedTheme), [resolvedTheme]);
+  const [fitRung, setFitRung] = React.useState(0);
+  // Restart the ladder from the top whenever the content/template/base theme
+  // changes — done during render (React's supported "reset on prop change"
+  // pattern) to avoid a setState-in-effect cascade.
+  const [fitKey, setFitKey] = React.useState({ data, templateId, resolvedTheme });
+  if (
+    fitKey.data !== data ||
+    fitKey.templateId !== templateId ||
+    fitKey.resolvedTheme !== resolvedTheme
+  ) {
+    setFitKey({ data, templateId, resolvedTheme });
+    setFitRung(0);
+  }
+  const activeTheme = ladder[Math.min(fitRung, ladder.length - 1)] ?? resolvedTheme;
+
   // Bootstrap the iframe document: inject reset + fonts + a mount node.
   const onIframeLoad = React.useCallback(() => {
     const doc = iframeRef.current?.contentDocument;
@@ -196,8 +217,8 @@ export function CvPreview({
       style.id = "cv-css";
       doc.head.appendChild(style);
     }
-    style.textContent = `${fontFaceCss()}\n${buildCss(resolvedTheme)}`;
-  }, [resolvedTheme, mountEl]);
+    style.textContent = `${fontFaceCss()}\n${buildCss(activeTheme)}`;
+  }, [activeTheme, mountEl]);
 
   // Fit-to-width scaling (responsive). Recomputes on resize.
   React.useEffect(() => {
@@ -214,7 +235,8 @@ export function CvPreview({
     return () => ro.disconnect();
   }, []);
 
-  // Measure rendered content height for the live fit gauge.
+  // Measure rendered content height; advance the fit ladder until it fits the
+  // one-page limit (or the ladder is exhausted), then report the final height.
   React.useEffect(() => {
     if (!mountEl) return;
     const measure = () => {
@@ -230,11 +252,17 @@ export function CvPreview({
       } else {
         h = body.scrollHeight;
       }
+      const limit = activeTheme.page.heightPx - activeTheme.page.safeBottomPx;
+      // Still overflowing and rungs left → tighten one notch and re-measure.
+      if (h > limit + 1 && fitRung < ladder.length - 1) {
+        setFitRung((r) => r + 1);
+        return;
+      }
       onMeasure?.(h);
     };
-    const id = window.setTimeout(measure, 60);
+    const id = window.setTimeout(measure, 50);
     return () => window.clearTimeout(id);
-  }, [data, resolvedTheme, templateId, mountEl, onMeasure]);
+  }, [data, activeTheme, templateId, mountEl, fitRung, ladder.length, onMeasure]);
 
   // Delegate clicks inside the iframe to the field-click handler.
   React.useEffect(() => {
@@ -287,7 +315,7 @@ export function CvPreview({
         node.style.boxShadow = "inset 0 -2px 0 0 #B5740F";
       }
     }
-  }, [showChanges, changedPaths, data, resolvedTheme, mountEl, onFieldClick]);
+  }, [showChanges, changedPaths, data, activeTheme, mountEl, onFieldClick]);
 
   // Scroll-to + flash a focused field (Changes jump-link).
   React.useEffect(() => {
@@ -328,7 +356,7 @@ export function CvPreview({
         />
         {mountEl &&
           createPortal(
-            <Template data={data} theme={resolvedTheme} />,
+            <Template data={data} theme={activeTheme} />,
             mountEl,
           )}
       </div>

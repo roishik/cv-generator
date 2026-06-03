@@ -39,13 +39,18 @@ import { computeStructuredDiff, type StructuredDiff } from "@/lib/tailor/diff";
 // Input validation
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RunTailoringInput = z.object({
-  jobDescription: z.string().min(30, "Paste a fuller job description (≥30 chars)."),
-  templateId: TemplateId.optional(),
-  company: z.string().max(200).optional(),
-  title: z.string().max(200).optional(),
-  instructions: z.string().max(4000).optional(),
-});
+const RunTailoringInput = z
+  .object({
+    jobDescription: z.string().max(20000).optional(),
+    templateId: TemplateId.optional(),
+    company: z.string().max(200).optional(),
+    title: z.string().max(200).optional(),
+    instructions: z.string().max(4000).optional(),
+  })
+  .refine(
+    (v) => (v.jobDescription?.trim().length ?? 0) >= 30 || !!v.instructions?.trim(),
+    { message: "Provide a job description (≥30 chars) or instructions to the AI." },
+  );
 
 const ReRenderInput = z.object({
   cvDocumentId: z.string().uuid(),
@@ -74,7 +79,7 @@ export async function runTailoring(
 
   return tailorToJob({
     userId,
-    jobDescription: input.jobDescription,
+    jobDescription: input.jobDescription ?? "",
     ...(input.templateId ? { templateId: input.templateId } : {}),
     ...(input.company ? { company: input.company } : {}),
     ...(input.title ? { title: input.title } : {}),

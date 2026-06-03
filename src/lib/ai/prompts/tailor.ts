@@ -20,6 +20,7 @@ export function buildTailorUserPrompt(input: {
   templateId: TemplateId;
   instructions?: string;
 }): string {
+  const jd = input.jdText?.trim() ?? "";
   const lines = [
     `Target template: ${input.templateId}`,
     "",
@@ -28,11 +29,14 @@ export function buildTailorUserPrompt(input: {
     JSON.stringify(input.knowledgeBase, null, 2),
     "```",
     "",
-    "Job description to tailor toward:",
-    '"""',
-    input.jdText,
-    '"""',
   ];
+  if (jd.length >= 30) {
+    lines.push("Job description to tailor toward:", '"""', jd, '"""');
+  } else {
+    lines.push(
+      "No specific job description was provided. Produce a strong, well-rounded one-page CV from the knowledge base and apply the user instructions below.",
+    );
+  }
   const extra = input.instructions?.trim();
   if (extra) {
     lines.push(

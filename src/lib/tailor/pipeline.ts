@@ -110,9 +110,14 @@ export async function tailorToJob(
   existingTx?: RlsDb,
 ): Promise<TailorToJobResult> {
   if (!input.userId) throw new Error("tailorToJob: userId is required");
-  const jd = input.jobDescription?.trim();
-  if (!jd || jd.length < 30) {
-    throw new Error("tailorToJob: jobDescription is empty or too short to tailor against");
+  const jd = (input.jobDescription ?? "").trim();
+  const hasInstructions = !!input.instructions?.trim();
+  // Allow a tailoring run with NO job description as long as the user gave
+  // free-text instructions (e.g. "remove the MBA"). Otherwise require a real JD.
+  if (jd.length < 30 && !hasInstructions) {
+    throw new Error(
+      "tailorToJob: provide a job description (≥30 chars) or instructions to tailor against",
+    );
   }
 
   const run = (tx: RlsDb) => runInTx(tx, input, jd);
@@ -348,7 +353,8 @@ async function upsertJobDescription(
       userId,
       ...(input.title ? { title: input.title } : {}),
       ...(input.company ? { company: input.company } : {}),
-      rawText: jd,
+      // Keep a non-empty record even for instructions-only runs (no real JD).
+      rawText: jd || "(no job description — tailored via instructions)",
       sha256: jdSha,
     })
     .returning({ id: jobDescriptions.id });

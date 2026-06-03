@@ -153,7 +153,11 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
   }, [diff, view]);
 
   // ── Generate ──
-  const canGenerate = initial.hasKnowledgeBase && jd.trim().length >= 30 && !generating;
+  // Generate when there's a real JD (≥30 chars) OR free-text instructions to act on.
+  const canGenerate =
+    initial.hasKnowledgeBase &&
+    (jd.trim().length >= 30 || instructions.trim().length > 0) &&
+    !generating;
 
   const handleGenerate = React.useCallback(async () => {
     if (!canGenerate) return;
