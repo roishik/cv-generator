@@ -30,6 +30,9 @@ import {
   Download,
   RotateCcw,
   Loader2,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -62,6 +65,7 @@ import {
   recomputeDiff,
   setProfilePhoto,
   getOriginalResume,
+  renameVersion,
 } from "@/app/(app)/tailor/actions";
 
 export interface TailorWorkspaceInitial {
@@ -124,6 +128,28 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
   // Inline-edit popover state.
   const [editPath, setEditPath] = React.useState<string | null>(null);
   const [editValue, setEditValue] = React.useState("");
+
+  // Header title rename state.
+  const [label, setLabel] = React.useState<string | null>(initial.label);
+  const [renaming, setRenaming] = React.useState(false);
+  const [renameValue, setRenameValue] = React.useState("");
+
+  const commitRename = React.useCallback(async () => {
+    const next = renameValue.trim();
+    if (!docId || !next) {
+      setRenaming(false);
+      return;
+    }
+    try {
+      await renameVersion(docId, next);
+      setLabel(next);
+      toast.success("Renamed.");
+    } catch (e) {
+      toast.error((e as Error).message ?? "Rename failed.");
+    } finally {
+      setRenaming(false);
+    }
+  }, [docId, renameValue]);
 
   const displayData = view === "tailored" && tailored ? tailored : baseline;
 
@@ -646,9 +672,59 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
               Back
             </Link>
           </Button>
-          <span className="truncate text-[13px] font-medium text-foreground">
-            {initial.label ?? "Untitled draft"}
-          </span>
+          {renaming ? (
+            <div className="flex items-center gap-1">
+              <Input
+                autoFocus
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void commitRename();
+                  if (e.key === "Escape") setRenaming(false);
+                }}
+                className="h-7 w-48 text-[13px]"
+                aria-label="CV name"
+              />
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => void commitRename()}
+                aria-label="Save name"
+              >
+                <Check className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => setRenaming(false)}
+                aria-label="Cancel rename"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex min-w-0 items-center gap-1">
+              <span className="truncate text-[13px] font-medium text-foreground">
+                {label ?? "Untitled draft"}
+              </span>
+              {docId && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setRenameValue(label ?? "");
+                    setRenaming(true);
+                  }}
+                  aria-label="Rename CV"
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {tailored && (
