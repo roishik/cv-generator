@@ -47,7 +47,14 @@ export default function RootLayout({
       className={`${inter.variable} ${fraunces.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-full flex-col bg-background text-foreground">
+      <body
+        className="flex min-h-full flex-col bg-background text-foreground"
+        // Browser extensions (Grammarly, etc.) inject attributes like
+        // data-gr-ext-installed onto <body> before React hydrates, causing a
+        // harmless attribute-mismatch warning. Suppress it on <body> too
+        // (the flag only covers the element it's set on, not descendants).
+        suppressHydrationWarning
+      >
         {children}
         <Toaster position="bottom-right" />
       </body>
