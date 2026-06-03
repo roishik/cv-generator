@@ -21,7 +21,7 @@ import {
   buildExtractionUserPrompt,
   buildRepairPrompt,
 } from "./prompts/extraction";
-import { TAILOR_SYSTEM_PROMPT, buildTailorUserPrompt } from "./prompts/tailor";
+import { buildTailorPrompts } from "./prompts/tailor";
 import { EDIT_PROFILE_SYSTEM_PROMPT, buildEditProfileUserPrompt } from "./prompts/edit-profile";
 import { parseWithRepair } from "./structured";
 
@@ -103,16 +103,12 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async tailor(input: TailorInput) {
-    const user = buildTailorUserPrompt(input);
-    const first = await this.callTool(
-      TAILOR_CV_JSON_SCHEMA,
-      TAILOR_SYSTEM_PROMPT,
-      user,
-    );
+    const { system, user } = buildTailorPrompts(input);
+    const first = await this.callTool(TAILOR_CV_JSON_SCHEMA, system, user);
     return parseWithRepair(this.id, "tailor", TailorResult, first, (msg) =>
       this.callTool(
         TAILOR_CV_JSON_SCHEMA,
-        TAILOR_SYSTEM_PROMPT,
+        system,
         `${user}\n\n${buildRepairPrompt(msg)}`,
       ),
     );

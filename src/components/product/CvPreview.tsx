@@ -28,7 +28,8 @@ import { Clean } from "@/lib/render-engine/templates/Clean";
 import { buildCss } from "@/lib/render-engine/css";
 import { fontFaceCss } from "@/lib/render-engine/fonts/fonts";
 import { defaultThemeFor } from "@/lib/render-engine/themes/registry";
-import { buildFitLadder } from "@/lib/render-engine/fit";
+import { buildFitLadder, nextFitStep, type FitPhase } from "@/lib/render-engine/fit";
+import { measureDocument } from "@/lib/render-engine/measure-content";
 import type { CvData, TemplateId, ThemeTokens } from "@/lib/schemas/cv-data";
 
 const A4_W = 794;
@@ -155,11 +156,18 @@ export function CvPreview({
   // (tighten gaps → line-height → font) so the live preview actually fits one
   // page instead of just reporting overflow. `fitRung` advances until the
   // measured content fits, or the ladder is exhausted (honest overflow).
-  const ladder = React.useMemo(() => buildFitLadder(resolvedTheme), [resolvedTheme]);
-  const [fitRung, setFitRung] = React.useState(0);
-  // Restart the ladder from the top whenever the content/template/base theme
-  // changes — done during render (React's supported "reset on prop change"
-  // pattern) to avoid a setState-in-effect cascade.
+  const { rungs, baseIndex } = React.useMemo(
+    () => buildFitLadder(resolvedTheme),
+    [resolvedTheme],
+  );
+  // Start at the base rung; the walk expands (toward 0) or tightens (toward the
+  // last rung) from there. `fitPhase` tracks the walk direction so it can settle
+  // without oscillating (see nextFitStep).
+  const [fitRung, setFitRung] = React.useState(baseIndex);
+  const [fitPhase, setFitPhase] = React.useState<FitPhase>("init");
+  // Restart the ladder whenever the content/template/base theme changes — done
+  // during render (React's supported "reset on prop change" pattern) to avoid a
+  // setState-in-effect cascade.
   const [fitKey, setFitKey] = React.useState({ data, templateId, resolvedTheme });
   if (
     fitKey.data !== data ||
@@ -167,9 +175,10 @@ export function CvPreview({
     fitKey.resolvedTheme !== resolvedTheme
   ) {
     setFitKey({ data, templateId, resolvedTheme });
-    setFitRung(0);
+    setFitRung(baseIndex);
+    setFitPhase("init");
   }
-  const activeTheme = ladder[Math.min(fitRung, ladder.length - 1)] ?? resolvedTheme;
+  const activeTheme = rungs[Math.min(Math.max(fitRung, 0), rungs.length - 1)] ?? resolvedTheme;
 
   // Bootstrap the iframe document: inject reset + fonts + a mount node.
   const onIframeLoad = React.useCallback(() => {
@@ -242,27 +251,38 @@ export function CvPreview({
     const measure = () => {
       const doc = iframeRef.current?.contentDocument;
       if (!doc) return;
-      // For sidebar the page is a fixed grid; main content drives overflow.
-      const page = doc.querySelector<HTMLElement>(".cv-page");
-      const body = doc.body;
+      // Use the SAME authoritative measurement the PDF uses (neutralise the
+      // full-height shells, read the deepest content edge). Run it from the
+      // parent against the iframe's same-origin document — the iframe is
+      // sandboxed without `allow-scripts`, so we can't eval inside it.
       let h: number;
-      if (templateId === "sidebar" && page) {
-        const main = page.querySelector<HTMLElement>(".main-content");
-        h = main ? main.scrollHeight + 48 /* top pad approx */ : page.scrollHeight;
-      } else {
-        h = body.scrollHeight;
-      }
-      const limit = activeTheme.page.heightPx - activeTheme.page.safeBottomPx;
-      // Still overflowing and rungs left → tighten one notch and re-measure.
-      if (h > limit + 1 && fitRung < ladder.length - 1) {
-        setFitRung((r) => r + 1);
+      try {
+        h = measureDocument(doc).contentHeightPx;
+      } catch {
+        // Display-only fallback; must NOT drive ladder decisions.
+        onMeasure?.(doc.body.scrollHeight);
         return;
       }
-      onMeasure?.(h);
+      const limit = activeTheme.page.heightPx - activeTheme.page.safeBottomPx;
+      const step = nextFitStep({
+        fitRung,
+        phase: fitPhase,
+        h,
+        limit,
+        last: rungs.length - 1,
+        fillTol: 24,
+      });
+      if (step.phase !== fitPhase) setFitPhase(step.phase);
+      if (step.fitRung !== fitRung) {
+        // Move a rung and re-measure (activeTheme change re-runs this effect).
+        setFitRung(step.fitRung);
+        return;
+      }
+      if (step.report) onMeasure?.(h);
     };
     const id = window.setTimeout(measure, 50);
     return () => window.clearTimeout(id);
-  }, [data, activeTheme, templateId, mountEl, fitRung, ladder.length, onMeasure]);
+  }, [data, activeTheme, templateId, mountEl, fitRung, fitPhase, rungs.length, onMeasure]);
 
   // Delegate clicks inside the iframe to the field-click handler.
   React.useEffect(() => {

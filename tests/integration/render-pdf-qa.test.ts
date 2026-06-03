@@ -5,6 +5,7 @@ import { closeBrowser } from "@/lib/pdf/browser-pool";
 import { runQaChecks } from "@/lib/qa/assertions";
 import { sampleCvData } from "@/lib/render-engine/sample-data";
 import { defaultThemeFor } from "@/lib/render-engine/themes/registry";
+import { buildFitLadder } from "@/lib/render-engine/fit";
 import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 
 afterAll(async () => {
@@ -66,7 +67,43 @@ describe("auto-fit ladder", () => {
       const res = await renderCvToPdf(heavy, "clean");
       expect(res.fits).toBe(true);
       if (res.fits) {
-        expect(res.rungUsed).toBeGreaterThan(0); // proves the ladder actually engaged
+        const { baseIndex } = buildFitLadder(defaultThemeFor("clean"));
+        // rungUsed beyond the base proves the ladder TIGHTENED (didn't just clip).
+        expect(res.rungUsed).toBeGreaterThan(baseIndex);
+        expect(res.contentHeightPx).toBeLessThanOrEqual(
+          defaultThemeFor("clean").page.heightPx - defaultThemeFor("clean").page.safeBottomPx,
+        );
+      }
+    },
+    120_000,
+  );
+
+  it(
+    "expands a short CvData to fill the page (rung below base) without overflowing",
+    async () => {
+      // A deliberately sparse CV — one short experience, no education/leadership —
+      // sits well under one page, so the ladder should EXPAND (rung < baseIndex)
+      // to fill the gap rather than leave a large bottom whitespace.
+      const light: CvData = {
+        ...sampleCvData,
+        summary: "Product manager.",
+        experience: [
+          {
+            kbExperienceId: "8f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e99",
+            company: "Acme",
+            role: "PM",
+            period: "2022 — Present",
+            bullets: ["Shipped a thing."],
+          },
+        ],
+        education: [],
+        leadership: [],
+      };
+      const res = await renderCvToPdf(light, "clean");
+      expect(res.fits).toBe(true);
+      if (res.fits) {
+        const { baseIndex } = buildFitLadder(defaultThemeFor("clean"));
+        expect(res.rungUsed).toBeLessThan(baseIndex); // expanded to fill
         expect(res.contentHeightPx).toBeLessThanOrEqual(
           defaultThemeFor("clean").page.heightPx - defaultThemeFor("clean").page.safeBottomPx,
         );

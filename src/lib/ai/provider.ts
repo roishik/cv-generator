@@ -9,7 +9,7 @@ import type {
 import type {
   KnowledgeBaseForLLM,
 } from "@/lib/schemas/knowledge-base";
-import type { TemplateId } from "@/lib/schemas/cv-data";
+import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 
 export type ProviderId = "anthropic" | "openai" | "google" | "deepseek" | "mock";
 
@@ -35,6 +35,12 @@ export interface TailorInput {
   templateId: TemplateId;
   /** Optional free-text user instructions (e.g. "drop bullet 3, emphasize leadership"). */
   instructions?: string;
+  /**
+   * The candidate's CURRENT CV. When instructions are given WITHOUT a real JD,
+   * the prompt switches to minimal-edit mode: apply the instruction to this CV
+   * and preserve everything else verbatim (instead of re-tailoring from scratch).
+   */
+  baselineCvData?: CvData;
 }
 
 /**

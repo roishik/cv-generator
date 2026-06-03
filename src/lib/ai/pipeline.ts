@@ -115,6 +115,7 @@ export async function tailorCv(
     jdText: input.jobDescription,
     templateId: input.templateId,
     ...(input.instructions ? { instructions: input.instructions } : {}),
+    ...(input.baselineCvData ? { baselineCvData: input.baselineCvData } : {}),
   });
 
   const cvData = normalizeTailorCvData(result);
