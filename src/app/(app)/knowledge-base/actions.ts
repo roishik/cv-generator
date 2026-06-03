@@ -15,7 +15,9 @@
  * provenance links (kbExperienceId).
  */
 
+import { randomUUID } from "node:crypto";
 import { asc, desc, eq } from "drizzle-orm";
+import { z } from "zod";
 import { requireSession } from "@/lib/auth/guards";
 import { withUser } from "@/lib/db/rls";
 import {
@@ -24,7 +26,10 @@ import {
   kbEducation,
   kbSkills,
 } from "@/lib/db/schema";
-import { KbAngle } from "@/lib/schemas/knowledge-base";
+import { KbAngle, KnowledgeBase } from "@/lib/schemas/knowledge-base";
+import { createProvider } from "@/lib/ai/factory";
+import { resolveProvider } from "@/lib/providers/resolve-provider";
+import type { ExtractionResult } from "@/lib/schemas/llm-contracts";
 import { EditableKnowledgeBase, type EditableKnowledgeBase as EditableKb } from "./schema";
 
 export interface LoadedEditableKb {
@@ -108,6 +113,138 @@ export async function getKnowledgeBase(): Promise<LoadedEditableKb> {
 
     return { hasKnowledgeBase: true, knowledgeBaseId: kb.id, data };
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Edit with AI (LLM call #3): natural-language edit of the profile.
+// The result is RETURNED to the client to review; it is NOT saved here — the
+// user applies it to the form and clicks Save (saveKnowledgeBase) to persist.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const EditWithAiInput = z.object({
+  current: EditableKnowledgeBase,
+  instruction: z.string().min(1, "Describe the change").max(2000),
+});
+
+export interface EditWithAiResult {
+  ok: boolean;
+  data?: EditableKb;
+  error?: string;
+}
+
+/** Map the editable shape into the LLM-facing KnowledgeBase (ids are synthetic for input). */
+function toLlmKb(e: EditableKb) {
+  return KnowledgeBase.parse({
+    narrative: e.narrative,
+    header: e.header,
+    contact: e.contact,
+    experiences: e.experiences.map((x) => ({
+      id: x.id ?? randomUUID(),
+      company: x.company,
+      role: x.role,
+      ...(x.period ? { period: x.period } : {}),
+      ...(x.location ? { location: x.location } : {}),
+      bulletsFull: x.bulletsFull,
+      angles: x.angles,
+      tags: x.tags,
+    })),
+    education: e.education.map((x) => ({
+      id: x.id ?? randomUUID(),
+      institution: x.institution,
+      ...(x.degree ? { degree: x.degree } : {}),
+      ...(x.period ? { period: x.period } : {}),
+      ...(x.note ? { note: x.note } : {}),
+    })),
+    leadership: [],
+    skills: e.skills,
+    languages: [],
+  });
+}
+
+const norm = (s: string) => s.trim().toLowerCase();
+
+/** Map the LLM's ExtractionResult back to the editable shape, preserving ids by match. */
+function fromExtraction(result: ExtractionResult, prev: EditableKb): EditableKb {
+  const usedExp = new Set<number>();
+  const usedEdu = new Set<number>();
+  return {
+    narrative: prev.narrative,
+    header: {
+      name: result.header.name,
+      title: result.header.title ?? "",
+      ...(result.header.website ? { website: result.header.website } : {}),
+      summaryLong: result.header.summaryLong ?? prev.header.summaryLong,
+    },
+    contact: {
+      email: result.contact.email,
+      phone: result.contact.phone,
+      location: result.contact.location,
+      linkedin: result.contact.linkedin,
+    },
+    experiences: result.experiences.map((x) => {
+      // Preserve an existing id when the company matches a not-yet-claimed prior row.
+      const idx = prev.experiences.findIndex(
+        (p, i) => !usedExp.has(i) && norm(p.company) === norm(x.company),
+      );
+      let id: string | undefined;
+      if (idx >= 0) {
+        usedExp.add(idx);
+        id = prev.experiences[idx]!.id;
+      }
+      return {
+        ...(id ? { id } : {}),
+        company: x.company,
+        role: x.role,
+        period: x.period,
+        location: x.location,
+        bulletsFull: x.bulletsFull,
+        angles: (x.angles ?? []).map((a) => ({ label: a.label, jdSignals: a.jdSignals })),
+        tags: x.tags ?? [],
+      };
+    }),
+    education: result.education.map((x) => {
+      const idx = prev.education.findIndex(
+        (p, i) => !usedEdu.has(i) && norm(p.institution) === norm(x.institution),
+      );
+      let id: string | undefined;
+      if (idx >= 0) {
+        usedEdu.add(idx);
+        id = prev.education[idx]!.id;
+      }
+      return {
+        ...(id ? { id } : {}),
+        institution: x.institution,
+        degree: x.degree,
+        period: x.period,
+        note: x.note,
+      };
+    }),
+    skills: { professional: result.skills.professional, soft: result.skills.soft },
+  };
+}
+
+/**
+ * Edit the profile with a natural-language instruction (LLM call #3).
+ * Returns the updated editable KB for the client to review + Save. RLS-scoped
+ * only for resolving the user's BYOK key; no DB writes happen here.
+ */
+export async function editProfileWithAi(raw: unknown): Promise<EditWithAiResult> {
+  const parsed = EditWithAiInput.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const userId = await requireSession();
+  try {
+    const { provider, apiKey } = await resolveProvider(userId);
+    const adapter = createProvider({ provider, ...(apiKey ? { apiKey } : {}) });
+    const result = await adapter.editProfile({
+      currentKb: toLlmKb(parsed.data.current),
+      instruction: parsed.data.instruction,
+    });
+    return { ok: true, data: fromExtraction(result, parsed.data.current) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
 }
 
 export interface SaveKbResult {

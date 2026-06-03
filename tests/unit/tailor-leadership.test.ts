@@ -67,6 +67,9 @@ function makeBadProvider(): LLMProvider {
       throw new Error("not used");
     },
     tailor: async () => result,
+    editProfile: async () => {
+      throw new Error("not used");
+    },
   };
 }
 

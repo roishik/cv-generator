@@ -423,13 +423,70 @@ function Step2Review({ result, onContinue }: Step2Props) {
 interface Step3Props {
   onFinish: () => void;
   provider: ProviderDescription;
+  /** True when a usable provider is already configured (real key on file, or mock). */
+  keyReady: boolean;
 }
 
-function Step3ApiKey({ onFinish, provider }: Step3Props) {
+function Step3ApiKey({ onFinish, provider, keyReady }: Step3Props) {
   const router = useRouter();
 
   function goToSettings() {
     router.push("/settings");
+  }
+  function startTailoring() {
+    router.push("/tailor");
+  }
+
+  // A real provider key is already configured → don't nag for a key. Confirm
+  // they're set and send them straight to tailoring.
+  if (keyReady && !provider.isMock) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h1 className="font-serif text-3xl font-semibold leading-tight text-foreground">
+            You&apos;re all set
+          </h1>
+          <p className="mt-2 text-[14px] text-muted-foreground">
+            Your profile is ready and your AI provider is connected.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-spruce-200 bg-spruce-50 p-4">
+          <p className="text-[13px] font-medium text-spruce-700">
+            {provider.name} connected · {provider.model}
+          </p>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Extraction and tailoring use your {provider.name} key (encrypted at
+            rest, never logged).
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <Button onClick={startTailoring} className="w-full" size="lg">
+            Start tailoring
+            <ChevronRight className="ml-2 h-4 w-4" aria-hidden />
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full text-muted-foreground"
+            onClick={onFinish}
+          >
+            Go to dashboard
+          </Button>
+        </div>
+
+        <p className="text-center text-[12px] text-muted-foreground">
+          Manage or switch keys anytime in{" "}
+          <button
+            onClick={goToSettings}
+            className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Settings
+          </button>
+          .
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -455,13 +512,13 @@ function Step3ApiKey({ onFinish, provider }: Step3Props) {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-spruce-200 bg-spruce-50 p-4">
-          <p className="text-[13px] font-medium text-spruce-700">
-            {provider.name} active · {provider.model}
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <p className="text-[13px] font-medium text-amber-800">
+            {provider.name} selected — add your key
           </p>
           <p className="mt-1 text-[12px] text-muted-foreground">
-            Extraction and tailoring use your {provider.name} key. Manage keys in
-            Settings.
+            Add your {provider.name} API key in Settings to enable extraction and
+            tailoring.
           </p>
         </div>
       )}
@@ -510,7 +567,13 @@ function Step3ApiKey({ onFinish, provider }: Step3Props) {
 // Main wizard
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function OnboardingWizard({ provider }: { provider: ProviderDescription }) {
+export function OnboardingWizard({
+  provider,
+  keyReady,
+}: {
+  provider: ProviderDescription;
+  keyReady: boolean;
+}) {
   const [step, setStep] = useState(0);
   const [extractionResult, setExtractionResult] = useState<ExtractionActionResult | null>(null);
   const router = useRouter();
@@ -538,7 +601,9 @@ export function OnboardingWizard({ provider }: { provider: ProviderDescription }
           {step === 1 && extractionResult && (
             <Step2Review result={extractionResult} onContinue={handleReviewContinue} />
           )}
-          {step === 2 && <Step3ApiKey onFinish={handleFinish} provider={provider} />}
+          {step === 2 && (
+            <Step3ApiKey onFinish={handleFinish} provider={provider} keyReady={keyReady} />
+          )}
         </div>
 
         {/* Skip */}

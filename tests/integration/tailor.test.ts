@@ -49,6 +49,9 @@ class CountingProvider implements LLMProvider {
   extractProfile(input: import("@/lib/ai/provider").ExtractProfileInput) {
     return this.inner.extractProfile(input);
   }
+  editProfile(input: import("@/lib/ai/provider").EditProfileInput) {
+    return this.inner.editProfile(input);
+  }
   async tailor(input: TailorInput): Promise<TailorResult> {
     this.tailorCalls++;
     const r = await this.inner.tailor(input);

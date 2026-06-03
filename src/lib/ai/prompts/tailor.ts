@@ -18,8 +18,9 @@ export function buildTailorUserPrompt(input: {
   knowledgeBase: KnowledgeBaseForLLM;
   jdText: string;
   templateId: TemplateId;
+  instructions?: string;
 }): string {
-  return [
+  const lines = [
     `Target template: ${input.templateId}`,
     "",
     "Knowledge base (the SUPERSET of TRUE facts — select/rephrase only from here):",
@@ -31,5 +32,16 @@ export function buildTailorUserPrompt(input: {
     '"""',
     input.jdText,
     '"""',
-  ].join("\n");
+  ];
+  const extra = input.instructions?.trim();
+  if (extra) {
+    lines.push(
+      "",
+      "Additional user instructions — follow these closely while still obeying the HARD RULE above (never invent facts not in the knowledge base):",
+      '"""',
+      extra,
+      '"""',
+    );
+  }
+  return lines.join("\n");
 }

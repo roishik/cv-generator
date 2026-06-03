@@ -28,9 +28,52 @@ export default function DocumentsPage() {
       </div>
 
       <div className="mt-8">
+        <Suspense fallback={null}>
+          <OriginalResumeCard />
+        </Suspense>
+      </div>
+
+      <div className="mt-6">
         <Suspense fallback={<ContentSkeleton rows={6} />}>
           <VersionHistoryContainer />
         </Suspense>
+      </div>
+    </div>
+  );
+}
+
+/** The user's original uploaded resume file (raw PDF/DOCX), if any. */
+async function OriginalResumeCard() {
+  let original: Awaited<
+    ReturnType<typeof import("../tailor/actions").getOriginalResume>
+  > = null;
+  try {
+    const { getOriginalResume } = await import("../tailor/actions");
+    original = await getOriginalResume();
+  } catch {
+    original = null;
+  }
+  if (!original) return null;
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Original résumé
+          </p>
+          <p className="mt-0.5 truncate text-[14px] font-medium text-foreground">
+            {original.filename}
+          </p>
+          <p className="text-[12px] text-muted-foreground">
+            The file you uploaded — your profile was extracted from this.
+          </p>
+        </div>
+        <Button asChild variant="outline" className="shrink-0">
+          <a href={original.url} target="_blank" rel="noopener noreferrer">
+            View original
+          </a>
+        </Button>
       </div>
     </div>
   );

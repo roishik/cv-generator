@@ -13,14 +13,22 @@
  */
 
 import * as React from "react";
-import { Plus, Trash2, Save, Loader2, X } from "lucide-react";
+import { Plus, Trash2, Save, Loader2, X, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { saveKnowledgeBase } from "@/app/(app)/knowledge-base/actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { saveKnowledgeBase, editProfileWithAi } from "@/app/(app)/knowledge-base/actions";
 import type { EditableKnowledgeBase } from "@/app/(app)/knowledge-base/schema";
 
 type Exp = EditableKnowledgeBase["experiences"][number];
@@ -30,6 +38,31 @@ export function KnowledgeBaseEditor({ initial }: { initial: EditableKnowledgeBas
   const [data, setData] = React.useState<EditableKnowledgeBase>(initial);
   const [saving, setSaving] = React.useState(false);
   const [dirty, setDirty] = React.useState(false);
+  const [aiOpen, setAiOpen] = React.useState(false);
+  const [aiInstruction, setAiInstruction] = React.useState("");
+  const [aiBusy, setAiBusy] = React.useState(false);
+
+  const handleEditWithAi = React.useCallback(async () => {
+    const instruction = aiInstruction.trim();
+    if (!instruction) return;
+    setAiBusy(true);
+    try {
+      const res = await editProfileWithAi({ current: data, instruction });
+      if (res.ok && res.data) {
+        setData(res.data);
+        setDirty(true);
+        setAiOpen(false);
+        setAiInstruction("");
+        toast.success("Applied — review the changes, then Save profile.");
+      } else {
+        toast.error(res.error ?? "Couldn't apply that edit.");
+      }
+    } catch (e) {
+      toast.error((e as Error).message ?? "Couldn't apply that edit.");
+    } finally {
+      setAiBusy(false);
+    }
+  }, [aiInstruction, data]);
 
   const update = React.useCallback((fn: (d: EditableKnowledgeBase) => void) => {
     setData((prev) => {
@@ -64,15 +97,66 @@ export function KnowledgeBaseEditor({ initial }: { initial: EditableKnowledgeBas
         <p className="text-[12px] text-muted-foreground" aria-live="polite">
           {saving ? "Saving…" : dirty ? "Unsaved changes" : "All changes saved"}
         </p>
-        <Button onClick={handleSave} disabled={saving} size="sm">
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <Save className="h-4 w-4" aria-hidden />
-          )}
-          Save profile
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setAiOpen(true)}
+            disabled={saving}
+            size="sm"
+            variant="outline"
+          >
+            <Wand2 className="h-4 w-4" aria-hidden />
+            Edit with AI
+          </Button>
+          <Button onClick={handleSave} disabled={saving} size="sm">
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Save className="h-4 w-4" aria-hidden />
+            )}
+            Save profile
+          </Button>
+        </div>
       </div>
+
+      {/* Edit-with-AI dialog */}
+      <Dialog open={aiOpen} onOpenChange={(o) => !aiBusy && setAiOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit profile with AI</DialogTitle>
+            <DialogDescription>
+              Describe the change in plain language — e.g. “add an MSc in Computer
+              Science from MIT, 2021”, “add a bullet about leading the migration to
+              Acme”, or “remove the Globex role”. The AI updates your profile; you
+              review and then <strong>Save profile</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={aiInstruction}
+            onChange={(e) => setAiInstruction(e.target.value)}
+            rows={4}
+            autoFocus
+            placeholder="Tell the AI what to change…"
+            disabled={aiBusy}
+            className="text-[14px]"
+          />
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setAiOpen(false)} disabled={aiBusy}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleEditWithAi} disabled={aiBusy || !aiInstruction.trim()}>
+              {aiBusy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Applying…
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4" aria-hidden /> Apply
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Header */}
       <Section title="Header">

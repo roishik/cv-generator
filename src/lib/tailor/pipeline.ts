@@ -58,6 +58,8 @@ export interface TailorToJobInput {
   /** Optional company/title metadata (auto-detected upstream from the JD). */
   company?: string;
   title?: string;
+  /** Optional free-text user instructions (e.g. "drop bullet 3, emphasize X"). */
+  instructions?: string;
   /** Test hook: a deterministic provider instead of the factory-built one. */
   providerOverride?: import("@/lib/ai/provider").LLMProvider;
 }
@@ -142,8 +144,13 @@ async function runInTx(
   const jdSha = jdHash(jd);
   const jobDescriptionId = await upsertJobDescription(tx, userId, jd, jdSha, input);
 
-  // 4) Cache lookup — identical (kbVersion + JD + templateId) ⇒ 0 LLM calls.
-  const cacheKey = tailorCacheKey({ kbVersion, jobDescription: jd, templateId });
+  // 4) Cache lookup — identical (kbVersion + JD + templateId + instructions) ⇒ 0 LLM calls.
+  const cacheKey = tailorCacheKey({
+    kbVersion,
+    jobDescription: jd,
+    templateId,
+    ...(input.instructions ? { instructions: input.instructions } : {}),
+  });
   const [cached] = await tx
     .select()
     .from(cvDocuments)
@@ -209,6 +216,7 @@ async function runInTx(
     jobDescription: jd,
     templateId,
     baselineCvData: baseline,
+    ...(input.instructions ? { instructions: input.instructions } : {}),
   });
 
   // 6) Structured diff vs baseline (richer than the coarse pipeline diff).

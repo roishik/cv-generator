@@ -19,7 +19,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth/guards";
 import { withUser } from "@/lib/db/rls";
-import { artifacts, cvDocuments, jobDescriptions } from "@/lib/db/schema";
+import { artifacts, cvDocuments, jobDescriptions, resumeUploads } from "@/lib/db/schema";
 import { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import { resolveProvider } from "@/lib/providers/resolve-provider";
 import { renderCvToPdf } from "@/lib/pdf/render-pdf";
@@ -44,6 +44,7 @@ const RunTailoringInput = z.object({
   templateId: TemplateId.optional(),
   company: z.string().max(200).optional(),
   title: z.string().max(200).optional(),
+  instructions: z.string().max(4000).optional(),
 });
 
 const ReRenderInput = z.object({
@@ -77,6 +78,7 @@ export async function runTailoring(
     ...(input.templateId ? { templateId: input.templateId } : {}),
     ...(input.company ? { company: input.company } : {}),
     ...(input.title ? { title: input.title } : {}),
+    ...(input.instructions ? { instructions: input.instructions } : {}),
     provider,
     ...(apiKey ? { apiKey } : {}),
   });
@@ -378,6 +380,39 @@ export async function getWorkspaceBaseline(): Promise<WorkspaceBaseline> {
       templateId: "sidebar" as TemplateId,
     };
   });
+}
+
+export interface OriginalResumeInfo {
+  url: string;
+  filename: string;
+  mimeType: string;
+  uploadedAt: string;
+}
+
+/**
+ * Return a short-lived signed URL to the user's most recent ORIGINAL uploaded
+ * resume file (the raw PDF/DOCX), distinct from the extracted baseline CvData.
+ * Returns null when the profile was built from pasted text (no file). RLS-scoped.
+ */
+export async function getOriginalResume(): Promise<OriginalResumeInfo | null> {
+  const userId = await requireSession();
+  const upload = await withUser(userId, async (tx) => {
+    const [u] = await tx
+      .select()
+      .from(resumeUploads)
+      .where(eq(resumeUploads.userId, userId))
+      .orderBy(desc(resumeUploads.createdAt))
+      .limit(1);
+    return u;
+  });
+  if (!upload) return null;
+  const { url } = await getStorage().getSignedUrl(upload.storagePath, 600);
+  return {
+    url,
+    filename: upload.filename,
+    mimeType: upload.mimeType,
+    uploadedAt: upload.createdAt.toISOString(),
+  };
 }
 
 const SetPhotoInput = z.object({

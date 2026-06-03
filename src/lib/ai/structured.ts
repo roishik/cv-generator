@@ -10,7 +10,7 @@ import { SchemaValidationError, type ProviderId } from "./provider";
  */
 export async function parseWithRepair<T>(
   provider: ProviderId,
-  call: "extractProfile" | "tailor",
+  call: "extractProfile" | "tailor" | "editProfile",
   schema: ZodType<T>,
   first: string,
   repair: (zodErrorMessage: string) => Promise<string>,

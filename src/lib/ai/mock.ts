@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import type {
   LLMProvider,
   ExtractProfileInput,
+  EditProfileInput,
   TailorInput,
   ValidateKeyResult,
 } from "./provider";
@@ -280,6 +281,64 @@ function mockTailor(input: TailorInput): TailorResult {
   });
 }
 
+/**
+ * Deterministic mock of profile editing: maps the current KB into the extraction
+ * shape and applies a keyword-driven, clearly-placeholder change so the edit is
+ * visible in local dev without a real LLM. Preserves everything else.
+ */
+function mockEditProfile(input: EditProfileInput): ExtractionResult {
+  const kb = input.currentKb;
+  const instr = input.instruction.trim();
+  const lower = instr.toLowerCase();
+
+  const base: ExtractionResult = ExtractionResult.parse({
+    header: {
+      name: kb.header.name,
+      ...(kb.header.title ? { title: kb.header.title } : {}),
+      ...(kb.header.website ? { website: kb.header.website } : {}),
+      ...(kb.header.summaryLong ? { summaryLong: kb.header.summaryLong } : {}),
+    },
+    contact: kb.contact ?? {},
+    experiences: kb.experiences.map((e) => ({
+      company: e.company,
+      role: e.role,
+      ...(e.period ? { period: e.period } : {}),
+      ...(e.location ? { location: e.location } : {}),
+      bulletsFull: e.bulletsFull ?? [],
+      ...(e.tags?.length ? { tags: e.tags } : {}),
+    })),
+    education: kb.education.map((ed) => ({
+      institution: ed.institution,
+      ...(ed.degree ? { degree: ed.degree } : {}),
+      ...(ed.period ? { period: ed.period } : {}),
+      ...(ed.note ? { note: ed.note } : {}),
+    })),
+    skills: {
+      professional: [...(kb.skills?.professional ?? [])],
+      soft: [...(kb.skills?.soft ?? [])],
+    },
+  });
+
+  // Keyword-driven deterministic edit (mock only).
+  if (/\beducation|degree|university|school|msc|bsc|phd|b\.s|m\.s\b/.test(lower)) {
+    base.education.push({
+      institution: `New school (from: "${instr.slice(0, 60)}")`,
+      degree: "Degree — edit me",
+      period: "Year — edit me",
+    });
+  } else if (/\bexperience|job|role|position|worked|company\b/.test(lower)) {
+    base.experiences.push({
+      company: `New role (from: "${instr.slice(0, 60)}")`,
+      role: "Title — edit me",
+      bulletsFull: ["Describe this experience — edit me."],
+    });
+  } else {
+    // Default: record the request as a professional skill so the change is visible.
+    base.skills.professional.push(instr.slice(0, 60));
+  }
+  return base;
+}
+
 export class MockProvider implements LLMProvider {
   readonly id = "mock" as const;
 
@@ -295,7 +354,11 @@ export class MockProvider implements LLMProvider {
   async tailor(input: TailorInput): Promise<TailorResult> {
     return mockTailor(input);
   }
+
+  async editProfile(input: EditProfileInput): Promise<ExtractionResult> {
+    return mockEditProfile(input);
+  }
 }
 
 // Exported for unit tests / deterministic id generation reuse.
-export { deterministicUuid, mockExtract, mockTailor };
+export { deterministicUuid, mockExtract, mockTailor, mockEditProfile };

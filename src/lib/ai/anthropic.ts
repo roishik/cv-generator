@@ -5,6 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   LLMProvider,
   ExtractProfileInput,
+  EditProfileInput,
   TailorInput,
   ValidateKeyResult,
 } from "./provider";
@@ -21,6 +22,7 @@ import {
   buildRepairPrompt,
 } from "./prompts/extraction";
 import { TAILOR_SYSTEM_PROMPT, buildTailorUserPrompt } from "./prompts/tailor";
+import { EDIT_PROFILE_SYSTEM_PROMPT, buildEditProfileUserPrompt } from "./prompts/edit-profile";
 import { parseWithRepair } from "./structured";
 
 export interface AnthropicOptions {
@@ -111,6 +113,22 @@ export class AnthropicProvider implements LLMProvider {
       this.callTool(
         TAILOR_CV_JSON_SCHEMA,
         TAILOR_SYSTEM_PROMPT,
+        `${user}\n\n${buildRepairPrompt(msg)}`,
+      ),
+    );
+  }
+
+  async editProfile(input: EditProfileInput) {
+    const user = buildEditProfileUserPrompt(input);
+    const first = await this.callTool(
+      EXTRACT_PROFILE_JSON_SCHEMA,
+      EDIT_PROFILE_SYSTEM_PROMPT,
+      user,
+    );
+    return parseWithRepair(this.id, "editProfile", ExtractionResult, first, (msg) =>
+      this.callTool(
+        EXTRACT_PROFILE_JSON_SCHEMA,
+        EDIT_PROFILE_SYSTEM_PROMPT,
         `${user}\n\n${buildRepairPrompt(msg)}`,
       ),
     );

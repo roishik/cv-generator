@@ -61,6 +61,7 @@ import {
   verifyVersionTruthfulness,
   recomputeDiff,
   setProfilePhoto,
+  getOriginalResume,
 } from "@/app/(app)/tailor/actions";
 
 export interface TailorWorkspaceInitial {
@@ -85,6 +86,7 @@ type Tab = "job" | "preview" | "changes";
 
 export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }) {
   const [jd, setJd] = React.useState("");
+  const [instructions, setInstructions] = React.useState("");
   const [templateId, setTemplateId] = React.useState<TemplateId>(initial.templateId);
   const [recommendation, setRecommendation] = React.useState<{
     templateId: TemplateId;
@@ -157,7 +159,11 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
     if (!canGenerate) return;
     setGenerating(true);
     try {
-      const res = await runTailoring({ jobDescription: jd, templateId });
+      const res = await runTailoring({
+        jobDescription: jd,
+        templateId,
+        ...(instructions.trim() ? { instructions: instructions.trim() } : {}),
+      });
       setDocId(res.cvDocumentId);
       setTailored(res.cvData);
       setDiff(res.diff);
@@ -183,7 +189,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
     } finally {
       setGenerating(false);
     }
-  }, [canGenerate, jd, templateId, initial.cvDocumentId]);
+  }, [canGenerate, jd, templateId, instructions, initial.cvDocumentId]);
 
   // ── Persist an inline edit → deterministic re-render (0 LLM) ──
   const persistEdit = React.useCallback(
@@ -396,6 +402,28 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         recommendation={recommendation}
       />
 
+      {/* Free-text instructions to the AI (optional) */}
+      <div className="space-y-1.5">
+        <label
+          htmlFor="tailor-instructions"
+          className="text-xs font-medium tracking-[0.02em] text-foreground"
+        >
+          Instructions to the AI <span className="text-muted-foreground">(optional)</span>
+        </label>
+        <Textarea
+          id="tailor-instructions"
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+          disabled={generating || !initial.hasKnowledgeBase}
+          rows={3}
+          placeholder="e.g. Emphasize leadership; drop the 3rd bullet under Acme; keep it to 4 skills."
+          className="resize-none text-[13px]"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Tell the AI how to tailor — it still never invents facts outside your profile.
+        </p>
+      </div>
+
       {/* Template picker */}
       <fieldset className="space-y-2" disabled={generating}>
         <legend className="text-xs font-medium tracking-[0.02em] text-foreground">
@@ -531,8 +559,26 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
           )}
         </div>
 
-        <div className="text-[11px] text-muted-foreground">
-          Click any field to edit
+        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const o = await getOriginalResume();
+                if (!o) {
+                  toast("No original file — this profile was built from pasted text.");
+                  return;
+                }
+                window.open(o.url, "_blank", "noopener,noreferrer");
+              } catch {
+                toast.error("Couldn't open the original résumé.");
+              }
+            }}
+            className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            View original
+          </button>
+          <span>Click any field to edit</span>
         </div>
       </div>
 

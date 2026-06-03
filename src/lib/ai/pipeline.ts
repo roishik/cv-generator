@@ -85,6 +85,8 @@ export interface TailorCvInput {
   templateId: TemplateId;
   /** Baseline CvData to diff the tailored output against (optional). */
   baselineCvData?: CvData;
+  /** Optional free-text user instructions for this tailoring run. */
+  instructions?: string;
 }
 
 export interface TailorCvOutput {
@@ -112,6 +114,7 @@ export async function tailorCv(
     knowledgeBase: kb,
     jdText: input.jobDescription,
     templateId: input.templateId,
+    ...(input.instructions ? { instructions: input.instructions } : {}),
   });
 
   const cvData = normalizeTailorCvData(result);

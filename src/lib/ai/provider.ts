@@ -22,10 +22,19 @@ export interface ExtractProfileInput {
   rawText: string;
 }
 
+export interface EditProfileInput {
+  /** The candidate's current knowledge base (the full, structured profile). */
+  currentKb: KnowledgeBaseForLLM;
+  /** Natural-language edit instruction (e.g. "add an MSc in CS from MIT, 2021"). */
+  instruction: string;
+}
+
 export interface TailorInput {
   knowledgeBase: KnowledgeBaseForLLM;
   jdText: string;
   templateId: TemplateId;
+  /** Optional free-text user instructions (e.g. "drop bullet 3, emphasize leadership"). */
+  instructions?: string;
 }
 
 /**
@@ -41,6 +50,8 @@ export interface LLMProvider {
   extractProfile(input: ExtractProfileInput): Promise<ExtractionResult>;
   /** LLM call #2 — (KB + JD + templateId) → tailored CvData + rationale. */
   tailor(input: TailorInput): Promise<TailorResult>;
+  /** LLM call #3 — (KB + instruction) → the full updated KB (same shape as extraction). */
+  editProfile(input: EditProfileInput): Promise<ExtractionResult>;
 }
 
 /** Default model ids per provider. Override via constructor options or env.
@@ -56,7 +67,7 @@ export const DEFAULT_MODELS = {
 export class SchemaValidationError extends Error {
   constructor(
     public readonly provider: ProviderId,
-    public readonly call: "extractProfile" | "tailor",
+    public readonly call: "extractProfile" | "tailor" | "editProfile",
     public readonly zodMessage: string,
   ) {
     // Never include the raw model output / any key material in the message.

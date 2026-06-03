@@ -165,6 +165,8 @@ from `app/**`, `lib/db/**`, or `lib/auth/**`.
 2. ESLint dep-direction rule must stay active (enforces architectural boundaries).
 3. Every boundary (action args, handler bodies, LLM output) validated with Zod.
 4. The render engine (`lib/render-engine/**`) is pure — no DB, no fetch, no side-effects.
-5. LLM is used for exactly 2 call types. Everything else is deterministic code.
+5. LLM is used for exactly 3 call types: (1) resume extraction, (2) JD tailoring,
+   (3) natural-language profile editing ("Edit with AI"). Everything else —
+   parsing, structuring, render, one-page-fit, PDF, QA, diff — is deterministic code.
 6. Dev-login shim is HARD-DISABLED in production (`NODE_ENV !== 'production'`).
 7. API keys are never logged; only `last4` chars shown in UI.
