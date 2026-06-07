@@ -35,6 +35,7 @@ const envSchema = z
     // ── Database ──────────────────────────────────────────────────────────────
     DATABASE_URL: z.string().url(),
     APP_DATABASE_URL: z.string().url().optional(),
+    CLOUD_SQL_CONNECTION_NAME: z.string().optional(),
 
     // ── File storage ──────────────────────────────────────────────────────────
     STORAGE_DRIVER: z.enum(["local", "supabase", "gcs"]).default("local"),

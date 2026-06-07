@@ -21,6 +21,7 @@ const envSchema = z.object({
     .default("false"),
   DATABASE_URL: z.string().url(),
   APP_DATABASE_URL: z.string().url().optional(),
+  CLOUD_SQL_CONNECTION_NAME: z.string().optional(),
   STORAGE_DRIVER: z.enum(["local", "supabase", "gcs"]).default("local"),
   STORAGE_LOCAL_DIR: z.string().default("./storage"),
   GCS_BUCKET_UPLOADS: z.string().optional(),
