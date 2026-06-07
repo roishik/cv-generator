@@ -58,3 +58,19 @@ describe("TAILOR_SYSTEM_PROMPT — interview backtrack test (finding 1.2)", () =
     expect(p).toMatch(/reframe|reframing|emphasis/);
   });
 });
+
+describe("TAILOR_SYSTEM_PROMPT — role-type framing + page budget (finding 2.2)", () => {
+  const p = TAILOR_SYSTEM_PROMPT.toLowerCase();
+
+  it("frames by the JD's role archetype across the main archetypes", () => {
+    expect(p).toMatch(/role archetype|role type|role-type/);
+    expect(p).toContain("technical");
+    expect(p).toContain("domain");
+    expect(p).toContain("consulting");
+  });
+
+  it("gives a relative per-section page budget (recent roles get more than older)", () => {
+    expect(p).toContain("recent role");
+    expect(p).toContain("older role");
+  });
+});

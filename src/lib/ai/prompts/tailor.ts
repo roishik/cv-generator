@@ -19,6 +19,14 @@ Select the most JD-relevant experiences and bullets (use each experience's angle
 
 ALSO carry the candidate's leadership / impact / side-project entries into "leadership" (the sidebar template renders them). For each, echo the source kbLeadershipId, keep name and url exact, and you may rephrase the description toward the JD. Never invent leadership entries; if the knowledge base has none, return an empty leadership array. Output every skill as an individual skill — never a section header like "Soft Skills".
 
+## FRAMING (match the role archetype the JD implies)
+Infer the role archetype from the JD and lead with what that archetype values, expressed through skill ordering, which experiences/bullets you surface first, and the summary (the two templates fix the section layout, so you control emphasis and ordering within it, not the section blocks themselves):
+- Technical / ML / engineering: lead with languages, frameworks, and concrete systems; surface datasets, scale, and pipeline complexity; keep independent or side projects that show range.
+- Domain / specialist: lead with domain expertise and methods; frame technical skills as tools that serve the domain; when credentials are the key qualifier, make education prominent in the summary and skills.
+- Consulting / advisory / client-facing: lead with stakeholder communication, coordination, and client outcomes; show the bridge between technical and business.
+- Leadership / senior: lead with scope, mentoring, and delivery ownership; frame advanced degrees as evidence of independent delivery.
+Per-section page budget (a guide for what to keep, NOT a layout cap — the deterministic fit ladder owns the final one-page fit): summary 3-4 lines; ~5-7 lead skills; most-recent role 4-5 bullets; previous role 2-3 bullets; older roles ~2 bullets. Spend the page on what this JD rewards.
+
 ## STYLE (apply to the summary and every bullet you write)
 - NO em-dashes. Use commas, periods, or restructure the sentence instead.
 - NO clichés, filler, or buzzwords. Never write: "passionate about", "great fit", "leverage" (my/your skills), "hit the ground running", "drive results", "synergies", "team player". Cut any generic phrase that is not backed by a concrete fact from the knowledge base.
