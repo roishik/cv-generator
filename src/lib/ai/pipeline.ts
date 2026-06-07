@@ -10,6 +10,7 @@ import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import type { ExtractionResult } from "@/lib/schemas/llm-contracts";
 import { normalizeTailorCvData, computeDiff, type CvDiffEntry } from "./contracts";
 import { verifyTruthfulness, type TruthfulnessReport } from "./truthfulness";
+import { lintStyle, type StyleReport } from "./style-lint";
 import { sanitizeSkills } from "./sanitize-skills";
 
 export interface ExtractProfileOutput {
@@ -97,6 +98,8 @@ export interface TailorCvOutput {
   diff: CvDiffEntry[];
   /** Code-enforced truthfulness verdict. Caller must reject when !ok. */
   truthfulness: TruthfulnessReport;
+  /** Deterministic writing-style review (warnings only; never blocks). */
+  style: StyleReport;
 }
 
 /**
@@ -140,6 +143,7 @@ export async function tailorCv(
   }
 
   const truthfulness = verifyTruthfulness(cvData, kb);
+  const style = lintStyle(cvData);
   const diff = input.baselineCvData
     ? computeDiff(input.baselineCvData, cvData)
     : [];
@@ -151,5 +155,6 @@ export async function tailorCv(
     templateSuggestion: result.templateSuggestion,
     diff,
     truthfulness,
+    style,
   };
 }

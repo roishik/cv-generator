@@ -29,6 +29,7 @@ import { createProvider } from "@/lib/ai/factory";
 import type { ProviderId, TokenUsage } from "@/lib/ai/provider";
 import { tailorCv, type TailorCvOutput } from "@/lib/ai/pipeline";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
+import { lintStyle, type StyleReport } from "@/lib/ai/style-lint";
 import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import type { TailorRationaleItem } from "@/lib/schemas/llm-contracts";
 import { assertUsageWithinCap } from "@/lib/ai/token-budget";
@@ -94,6 +95,8 @@ export interface TailorToJobSuccess {
   warnings: string[];
   diff: StructuredDiff;
   truthfulness: TruthfulnessReport;
+  /** Deterministic writing-style review (warnings only; never blocks export). */
+  style: StyleReport;
   /** Present when fits === true. */
   artifact?: {
     id: string;
@@ -181,6 +184,9 @@ async function runInTx(
       .limit(1);
     const diff = cached.diff as unknown as StructuredDiff;
     const truthfulness = cached.truthfulness as unknown as TruthfulnessReport;
+    // Style is a pure function of cvData and is not persisted — recompute it on
+    // the cache-hit path so the warning surface is identical to a fresh run.
+    const style = lintStyle(cached.cvData as CvData);
     return {
       ok: true,
       fits: !!artifact,
@@ -199,6 +205,7 @@ async function runInTx(
       truthfulness: truthfulness?.flags
         ? truthfulness
         : { ok: true, flags: [] },
+      style,
       ...(artifact
         ? {
             artifact: {
@@ -372,6 +379,7 @@ async function runInTx(
       warnings: tailored.warnings,
       diff,
       truthfulness: tailored.truthfulness,
+      style: tailored.style,
       needsReduction: { reason: pdfResult.reason, suggestion: pdfResult.suggestion },
     };
   }
@@ -420,6 +428,7 @@ async function runInTx(
     warnings: tailored.warnings,
     diff,
     truthfulness: tailored.truthfulness,
+    style: tailored.style,
     artifact: {
       id: artifact!.id,
       storagePath,

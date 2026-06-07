@@ -88,6 +88,18 @@ describe("tailorCv() contract — full pipeline", () => {
     expect(out.truthfulness.flags.filter((f) => f.severity === "error")).toHaveLength(0);
   });
 
+  it("returns a deterministic style-lint report (finding 1.3, warnings only)", async () => {
+    const out = await tailorCv(provider, {
+      knowledgeBase: SAMPLE_KB,
+      jobDescription: SAMPLE_JD,
+      templateId: "clean",
+    });
+    expect(out.style).toBeDefined();
+    expect(Array.isArray(out.style.flags)).toBe(true);
+    // Style never blocks: there must be no error-severity flag.
+    expect(out.style.flags.every((f) => f.severity === "warning")).toBe(true);
+  });
+
   it("computes a diff against a baseline", async () => {
     const baseline = await tailorCv(provider, {
       knowledgeBase: SAMPLE_KB,

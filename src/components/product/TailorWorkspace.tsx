@@ -52,10 +52,12 @@ import { GenerationProgress } from "@/components/product/GenerationProgress";
 import { OnePageFitIndicator } from "@/components/product/OnePageFitIndicator";
 import { TailorDiffPanel } from "@/components/product/TailorDiffPanel";
 import { TruthfulnessReview } from "@/components/product/TruthfulnessReview";
+import { StyleReview } from "@/components/product/StyleReview";
 import { readPath, writePath } from "@/lib/tailor/cv-path";
 import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import type { StructuredDiff, FieldDiff, DiffKind } from "@/lib/tailor/diff";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
+import { lintStyle } from "@/lib/ai/style-lint";
 import {
   runTailoring,
   reRenderDocument,
@@ -165,6 +167,14 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
     }, 400);
     return () => window.clearTimeout(id);
   }, [jd]);
+
+  // ── Deterministic writing-style review (finding 1.3). lintStyle is a pure
+  // function of cvData, so we recompute it client-side from the current tailored
+  // data — always fresh, including after inline edits, with no server round-trip.
+  const styleReport = React.useMemo(
+    () => (tailored ? lintStyle(tailored) : null),
+    [tailored],
+  );
 
   // ── changedPaths for the preview overlay (from the diff) ──
   const changedPaths = React.useMemo(() => {
@@ -532,6 +542,16 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         </div>
       )}
 
+      {/* Writing-style review (deterministic, finding 1.3) */}
+      {tailored && (
+        <div className="space-y-1.5">
+          <h3 className="text-xs font-medium tracking-[0.02em] text-foreground">
+            Writing style
+          </h3>
+          <StyleReview report={styleReport} onJump={jumpPath} />
+        </div>
+      )}
+
       {/* Changes panel */}
       {tailored && diff && (
         <div className="space-y-1.5">
@@ -796,6 +816,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
             {tailored ? (
               <>
                 <TruthfulnessReview report={truthfulness} onJump={jumpPath} />
+                <StyleReview report={styleReport} onJump={jumpPath} />
                 {diff && <TailorDiffPanel diff={diff} focusPath={focusPath} onJump={jump} />}
               </>
             ) : (
