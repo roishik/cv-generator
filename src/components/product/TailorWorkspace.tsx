@@ -58,6 +58,7 @@ import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import type { StructuredDiff, FieldDiff, DiffKind } from "@/lib/tailor/diff";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
 import { lintStyle } from "@/lib/ai/style-lint";
+import type { CutSuggestion } from "@/lib/tailor/suggest-cuts";
 import {
   runTailoring,
   reRenderDocument,
@@ -112,6 +113,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
   const [needsReduction, setNeedsReduction] = React.useState<{
     reason: string;
     suggestion: string;
+    cutSuggestions?: CutSuggestion[];
   } | null>(null);
 
   const [showChanges, setShowChanges] = React.useState(true);
@@ -678,6 +680,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
           needsReduction={needsReduction}
           autoFitting={saving}
           onAutoFit={handleAutoFit}
+          onJumpToPath={jumpPath}
         />
       </div>
     </div>

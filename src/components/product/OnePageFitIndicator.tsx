@@ -11,6 +11,7 @@
 
 import { CheckCircle2, AlertTriangle, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { CutSuggestion } from "@/lib/tailor/suggest-cuts";
 
 const A4_H = 1123;
 
@@ -22,11 +23,18 @@ export interface OnePageFitProps {
   /** Authoritative server signal: false → ladder exhausted, needs reduction. */
   serverFits?: boolean | null;
   /** The server's reduction reason/suggestion when serverFits === false. */
-  needsReduction?: { reason: string; suggestion: string } | null;
+  needsReduction?: {
+    reason: string;
+    suggestion: string;
+    /** Relevance-weighted, lowest-value-first cut suggestions (finding 1.4). */
+    cutSuggestions?: CutSuggestion[];
+  } | null;
   /** Whether an auto-fit run is in flight. */
   autoFitting?: boolean;
   /** Auto-fit handler (tighten→trim). Shown only in the needs-reduction state. */
   onAutoFit?: () => void;
+  /** Jump to a bullet on the preview when a cut suggestion is clicked. */
+  onJumpToPath?: (path: string) => void;
 }
 
 function deriveState(pct: number, serverFits?: boolean | null): FitState {
@@ -42,6 +50,7 @@ export function OnePageFitIndicator({
   needsReduction,
   autoFitting,
   onAutoFit,
+  onJumpToPath,
 }: OnePageFitProps) {
   const pct =
     contentHeightPx != null ? Math.round((contentHeightPx / A4_H) * 100) : 0;
@@ -99,23 +108,48 @@ export function OnePageFitIndicator({
       </div>
 
       {state === "needs-reduction" && (
-        <div className="flex items-start justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2">
-          <p className="text-[11px] leading-4 text-destructive">
-            {needsReduction?.reason ?? "We couldn't fit this on one page."}{" "}
-            <span className="text-muted-foreground">
-              {needsReduction?.suggestion ?? "Trim a low-priority bullet, then re-render."}
-            </span>
-          </p>
-          {onAutoFit && (
-            <button
-              type="button"
-              onClick={onAutoFit}
-              disabled={autoFitting}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-destructive px-2 py-1 text-[11px] font-medium text-destructive-foreground hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-60"
-            >
-              <Scissors className="h-3 w-3" aria-hidden />
-              {autoFitting ? "Auto-fitting…" : "Auto-fit"}
-            </button>
+        <div className="space-y-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[11px] leading-4 text-destructive">
+              {needsReduction?.reason ?? "We couldn't fit this on one page."}{" "}
+              <span className="text-muted-foreground">
+                {needsReduction?.suggestion ?? "Trim a low-priority bullet, then re-render."}
+              </span>
+            </p>
+            {onAutoFit && (
+              <button
+                type="button"
+                onClick={onAutoFit}
+                disabled={autoFitting}
+                className="inline-flex shrink-0 items-center gap-1 rounded-md bg-destructive px-2 py-1 text-[11px] font-medium text-destructive-foreground hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-60"
+              >
+                <Scissors className="h-3 w-3" aria-hidden />
+                {autoFitting ? "Auto-fitting…" : "Auto-fit"}
+              </button>
+            )}
+          </div>
+
+          {needsReduction?.cutSuggestions && needsReduction.cutSuggestions.length > 0 && (
+            <div className="border-t border-destructive/15 pt-1.5">
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Lowest-value lines to trim first
+              </p>
+              <ul className="space-y-0.5">
+                {needsReduction.cutSuggestions.slice(0, 5).map((c) => (
+                  <li key={c.path}>
+                    <button
+                      type="button"
+                      onClick={() => onJumpToPath?.(c.path)}
+                      disabled={!onJumpToPath}
+                      title={c.reason}
+                      className="w-full truncate rounded px-1.5 py-1 text-left text-[11px] leading-4 text-foreground hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+                    >
+                      <span className="text-muted-foreground">{c.company}:</span> {c.text}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}

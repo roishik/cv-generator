@@ -33,6 +33,7 @@ import {
 } from "@/lib/tailor/kb-loader";
 import { recommendTemplate } from "@/lib/tailor/template-heuristic";
 import { verifyTruthfulness, type TruthfulnessReport } from "@/lib/ai/truthfulness";
+import { suggestCuts, type CutSuggestion } from "@/lib/tailor/suggest-cuts";
 import { computeStructuredDiff, type StructuredDiff } from "@/lib/tailor/diff";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -263,7 +264,7 @@ export async function listVersionHistory(): Promise<VersionHistoryItem[]> {
 export interface ReRenderResult {
   fits: boolean;
   cvDocumentId: string;
-  needsReduction?: { reason: string; suggestion: string };
+  needsReduction?: { reason: string; suggestion: string; cutSuggestions: CutSuggestion[] };
   artifact?: { id: string; byteSize: number; pageCount: number };
 }
 
@@ -279,14 +280,25 @@ export async function reRenderDocument(
   const userId = await requireSession();
   const input = ReRenderInput.parse(raw);
 
-  // Render outside the txn (Playwright is slow; keep the txn short).
-  const doc = await withUser(userId, async (tx) => {
+  // Render outside the txn (Playwright is slow; keep the txn short). Load the
+  // JD text alongside the doc so cut suggestions can be relevance-weighted if
+  // the edited content overflows (finding 1.4).
+  const { doc, jdText } = await withUser(userId, async (tx) => {
     const [d] = await tx
       .select()
       .from(cvDocuments)
       .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.id, input.cvDocumentId)))
       .limit(1);
-    return d;
+    let jdText = "";
+    if (d?.jobDescriptionId) {
+      const [jd] = await tx
+        .select({ rawText: jobDescriptions.rawText })
+        .from(jobDescriptions)
+        .where(eq(jobDescriptions.id, d.jobDescriptionId))
+        .limit(1);
+      jdText = jd?.rawText ?? "";
+    }
+    return { doc: d, jdText };
   });
   if (!doc) throw new Error("Document not found");
 
@@ -308,7 +320,11 @@ export async function reRenderDocument(
     return {
       fits: false,
       cvDocumentId: input.cvDocumentId,
-      needsReduction: { reason: pdf.reason, suggestion: pdf.suggestion },
+      needsReduction: {
+        reason: pdf.reason,
+        suggestion: pdf.suggestion,
+        cutSuggestions: suggestCuts(input.cvData, jdText),
+      },
     };
   }
 

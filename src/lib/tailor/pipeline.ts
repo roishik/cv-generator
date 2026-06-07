@@ -30,6 +30,7 @@ import type { ProviderId, TokenUsage } from "@/lib/ai/provider";
 import { tailorCv, type TailorCvOutput } from "@/lib/ai/pipeline";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
 import { lintStyle, type StyleReport } from "@/lib/ai/style-lint";
+import { suggestCuts, type CutSuggestion } from "./suggest-cuts";
 import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import type { TailorRationaleItem } from "@/lib/schemas/llm-contracts";
 import { assertUsageWithinCap } from "@/lib/ai/token-budget";
@@ -106,7 +107,12 @@ export interface TailorToJobSuccess {
     qa: QaReport;
   };
   /** Present when fits === false — the structured "reduce content" signal. */
-  needsReduction?: { reason: string; suggestion: string };
+  needsReduction?: {
+    reason: string;
+    suggestion: string;
+    /** Relevance-weighted, user-confirmable cut suggestions (finding 1.4). */
+    cutSuggestions: CutSuggestion[];
+  };
 }
 
 export type TailorToJobResult = TailorToJobSuccess;
@@ -220,6 +226,7 @@ async function runInTx(
             needsReduction: {
               reason: "Cached tailoring could not fit one page.",
               suggestion: "Reduce content and re-run.",
+              cutSuggestions: suggestCuts(cached.cvData as CvData, jd),
             },
           }),
     };
@@ -380,7 +387,11 @@ async function runInTx(
       diff,
       truthfulness: tailored.truthfulness,
       style: tailored.style,
-      needsReduction: { reason: pdfResult.reason, suggestion: pdfResult.suggestion },
+      needsReduction: {
+        reason: pdfResult.reason,
+        suggestion: pdfResult.suggestion,
+        cutSuggestions: suggestCuts(tailored.cvData, jd),
+      },
     };
   }
 
