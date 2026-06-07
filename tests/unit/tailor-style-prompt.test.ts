@@ -38,3 +38,23 @@ describe("TAILOR_SYSTEM_PROMPT — writing-style rules (finding 1.1)", () => {
     expect(p).toContain("forward-looking");
   });
 });
+
+describe("TAILOR_SYSTEM_PROMPT — interview backtrack test (finding 1.2)", () => {
+  const p = TAILOR_SYSTEM_PROMPT.toLowerCase();
+
+  it("states the interview backtrack test for the reframe boundary", () => {
+    expect(p).toContain("backtrack");
+    expect(p).toContain("interview");
+  });
+
+  it("gives the OK / flag-it / never taxonomy", () => {
+    expect(p).toContain("ok:");
+    expect(p).toMatch(/flag/);
+    expect(p).toContain("never:");
+  });
+
+  it("frames the test as the gray zone the truthfulness code gate cannot catch", () => {
+    // It must invite reframing (not forbid it) while drawing the honest line.
+    expect(p).toMatch(/reframe|reframing|emphasis/);
+  });
+});
