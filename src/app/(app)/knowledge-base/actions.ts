@@ -28,6 +28,13 @@ import {
 import { KbAngle } from "@/lib/schemas/knowledge-base";
 import { createProvider } from "@/lib/ai/factory";
 import { resolveProvider } from "@/lib/providers/resolve-provider";
+import { assertWithinRateLimit } from "@/lib/ratelimit";
+import { assertUsageWithinCap } from "@/lib/ai/token-budget";
+import {
+  providerModel,
+  providerUsage,
+  recordLlmUsageEvent,
+} from "@/lib/usage/llm-usage";
 import { EditableKnowledgeBase, type EditableKnowledgeBase as EditableKb } from "./schema";
 import { toLlmKb, fromExtraction } from "./ai-edit-map";
 
@@ -143,11 +150,45 @@ export async function editProfileWithAi(raw: unknown): Promise<EditWithAiResult>
   }
   const userId = await requireSession();
   try {
-    const { provider, apiKey } = await resolveProvider(userId);
+    assertWithinRateLimit({ kind: "llm", userId });
+    const { provider, apiKey, authMode } = await resolveProvider(userId, {
+      purpose: "edit-profile",
+      allowManaged: false,
+    });
     const adapter = createProvider({ provider, ...(apiKey ? { apiKey } : {}) });
-    const result = await adapter.editProfile({
-      currentKb: toLlmKb(parsed.data.current),
-      instruction: parsed.data.instruction,
+    const startedAt = Date.now();
+    const result = await adapter
+      .editProfile({
+        currentKb: toLlmKb(parsed.data.current),
+        instruction: parsed.data.instruction,
+      })
+      .catch(async (e) => {
+        await recordLlmUsageEvent({
+          userId,
+          kind: "edit_profile",
+          provider: adapter.id,
+          model: providerModel(adapter),
+          status: "error",
+          latencyMs: Date.now() - startedAt,
+          usage: providerUsage(adapter),
+          meta: {
+            billing: authMode,
+            error: (e as Error).message,
+          },
+        });
+        throw e;
+      });
+    const usage = providerUsage(adapter);
+    assertUsageWithinCap("edit-profile", usage);
+    await recordLlmUsageEvent({
+      userId,
+      kind: "edit_profile",
+      provider: adapter.id,
+      model: providerModel(adapter),
+      status: "ok",
+      latencyMs: Date.now() - startedAt,
+      usage,
+      meta: { billing: authMode },
     });
     return { ok: true, data: fromExtraction(result, parsed.data.current) };
   } catch (e) {

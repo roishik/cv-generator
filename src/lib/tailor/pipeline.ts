@@ -26,15 +26,22 @@ import type { RlsDb } from "@/lib/db/rls";
 import { withUser } from "@/lib/db/rls";
 import { artifacts, cvDocuments, jobDescriptions } from "@/lib/db/schema";
 import { createProvider } from "@/lib/ai/factory";
-import type { ProviderId } from "@/lib/ai/provider";
-import { tailorCv } from "@/lib/ai/pipeline";
+import type { ProviderId, TokenUsage } from "@/lib/ai/provider";
+import { tailorCv, type TailorCvOutput } from "@/lib/ai/pipeline";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
 import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import type { TailorRationaleItem } from "@/lib/schemas/llm-contracts";
+import { assertUsageWithinCap } from "@/lib/ai/token-budget";
 import { renderCvToPdf } from "@/lib/pdf/render-pdf";
 import { runQaChecks, type QaReport } from "@/lib/qa/assertions";
 import { defaultThemeFor } from "@/lib/render-engine/themes/registry";
 import { getStorage } from "@/lib/storage/local-fs";
+import { assertWithinRateLimit } from "@/lib/ratelimit";
+import {
+  providerModel,
+  providerUsage,
+  recordLlmUsageEvent,
+} from "@/lib/usage/llm-usage";
 import {
   loadBaselineCvData,
   loadKnowledgeBase,
@@ -55,6 +62,10 @@ export interface TailorToJobInput {
   apiKey?: string;
   /** Optional model override. */
   model?: string;
+  /** BYOK vs managed-free audit marker (set by resolveProvider). */
+  billingMode?: "mock" | "byok" | "managed-free";
+  /** Managed-free per-request cap (max(default, 2x rolling avg)). */
+  freeTokenCap?: number;
   /** Optional company/title metadata (auto-detected upstream from the JD). */
   company?: string;
   title?: string;
@@ -207,7 +218,9 @@ async function runInTx(
     };
   }
 
-  // 5) THE single LLM call (mock by default). Truthfulness gate runs inside.
+  // 5) LLM tailoring call (with one bounded truthfulness-repair retry for JD runs).
+  const hasRealJd = jd.length >= 30;
+  assertWithinRateLimit({ kind: "llm", userId });
   const provider =
     input.providerOverride ??
     createProvider({
@@ -216,13 +229,98 @@ async function runInTx(
       ...(input.model ? { model: input.model } : {}),
     });
 
-  const tailored = await tailorCv(provider, {
-    knowledgeBase,
-    jobDescription: jd,
-    templateId,
-    baselineCvData: baseline,
-    ...(input.instructions ? { instructions: input.instructions } : {}),
-  });
+  const startedAt = Date.now();
+  let attempts = 0;
+  let totalUsage: TokenUsage | null = null;
+  const collectUsage = () => {
+    const usage = providerUsage(provider);
+    if (!usage) return;
+    if (!totalUsage) {
+      totalUsage = { ...usage };
+      return;
+    }
+    totalUsage.promptTokens += usage.promptTokens;
+    totalUsage.completionTokens += usage.completionTokens;
+    totalUsage.totalTokens += usage.totalTokens;
+  };
+
+  let tailored: TailorCvOutput;
+  try {
+    attempts += 1;
+    tailored = await tailorCv(provider, {
+      knowledgeBase,
+      jobDescription: jd,
+      templateId,
+      baselineCvData: baseline,
+      ...(input.instructions ? { instructions: input.instructions } : {}),
+    });
+    collectUsage();
+
+    if (hasRealJd && !tailored.truthfulness.ok) {
+      attempts += 1;
+      tailored = await tailorCv(provider, {
+        knowledgeBase,
+        jobDescription: jd,
+        templateId,
+        baselineCvData: baseline,
+        instructions: buildTruthfulnessRepairInstruction(
+          input.instructions,
+          tailored.truthfulness,
+        ),
+      });
+      collectUsage();
+    }
+
+    if (!hasRealJd) {
+      tailored.truthfulness = { ok: true, flags: [] };
+    }
+
+    if (hasRealJd && !tailored.truthfulness.ok) {
+      throw new Error(
+        "Tailoring blocked: unable to produce a truthful CV after retry. Try adjusting the JD or your profile context.",
+      );
+    }
+
+    assertUsageWithinCap(
+      "tailor",
+      totalUsage,
+      input.billingMode === "managed-free" ? input.freeTokenCap : undefined,
+    );
+
+    await recordLlmUsageEvent({
+      userId,
+      kind: "tailor",
+      provider: provider.id,
+      model: providerModel(provider),
+      status: "ok",
+      latencyMs: Date.now() - startedAt,
+      usage: totalUsage,
+      meta: {
+        billing: input.billingMode ?? "unknown",
+        attempts,
+        hadTruthfulnessRetry: attempts > 1,
+        freeTokenCap: input.freeTokenCap ?? null,
+      },
+    });
+  } catch (e) {
+    collectUsage();
+    await recordLlmUsageEvent({
+      userId,
+      kind: "tailor",
+      provider: provider.id,
+      model: providerModel(provider),
+      status: "error",
+      latencyMs: Date.now() - startedAt,
+      usage: totalUsage,
+      meta: {
+        billing: input.billingMode ?? "unknown",
+        attempts,
+        freeTokenCap: input.freeTokenCap ?? null,
+        error: (e as Error).message,
+      },
+    });
+    throw e;
+  }
 
   // 6) Structured diff vs baseline (richer than the coarse pipeline diff).
   const diff = computeStructuredDiff(baseline, tailored.cvData);
@@ -369,4 +467,24 @@ async function nextTailoredVersion(tx: RlsDb, userId: string): Promise<number> {
     .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.kind, "tailored")));
   const max = rows.reduce((m, r) => Math.max(m, r.version), 0);
   return max + 1;
+}
+
+function buildTruthfulnessRepairInstruction(
+  existingInstruction: string | undefined,
+  report: TruthfulnessReport,
+): string {
+  const errors = report.flags
+    .filter((f) => f.severity === "error")
+    .map((f) => `- ${f.path}: ${f.message}`)
+    .slice(0, 12);
+  const retry = [
+    "RETRY MODE — STRICT TRUTHFULNESS REPAIR:",
+    "It is acceptable if the candidate does NOT fully match every JD requirement.",
+    "Do NOT force-fit missing years/skills. Prefer truthful partial-fit phrasing.",
+    "Example: if JD asks 4 years and KB supports 3, keep 3 years and position it honestly.",
+    "Keep every employer/company/period exactly as in the KB.",
+    "Fix these truthfulness errors exactly:",
+    ...errors,
+  ].join("\n");
+  return [existingInstruction?.trim() ?? "", retry].filter(Boolean).join("\n\n");
 }

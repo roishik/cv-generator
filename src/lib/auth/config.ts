@@ -56,6 +56,29 @@ function isDevLoginEnabled(): boolean {
   return process.env["AUTH_DEV_LOGIN"] === "true";
 }
 
+function allowedEmails(): Set<string> {
+  const raw = process.env["AUTH_ALLOWED_EMAILS"]?.trim() ?? "";
+  if (!raw) return new Set();
+  return new Set(
+    raw
+      .split(",")
+      .map((x) => x.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+function isAllowedByEmailAllowlist(
+  email: string | null | undefined,
+  provider: string | null | undefined,
+): boolean {
+  // Local dev shim should remain usable even if a beta allowlist is configured.
+  if (provider === "dev-login") return true;
+  const allow = allowedEmails();
+  if (allow.size === 0) return true;
+  if (!email) return false;
+  return allow.has(email.trim().toLowerCase());
+}
+
 // ─── Providers list ───────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,6 +193,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: "/sign-in",
   },
   callbacks: {
+    // Optional private-beta gate. When AUTH_ALLOWED_EMAILS is set, only listed
+    // emails can sign in via OAuth. Empty list means open sign-in.
+    async signIn({ user, account }) {
+      return isAllowedByEmailAllowlist(user.email, account?.provider);
+    },
     // Expose the DB user id on the session object so server code can call withUser().
     // Works for both database sessions (user param populated by adapter) and JWT
     // sessions (token.sub carries the user id set by the authorize callback).

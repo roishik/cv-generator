@@ -18,6 +18,12 @@ export interface ValidateKeyResult {
   message?: string;
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 export interface ExtractProfileInput {
   rawText: string;
 }
@@ -58,6 +64,13 @@ export interface LLMProvider {
   tailor(input: TailorInput): Promise<TailorResult>;
   /** LLM call #3 — (KB + instruction) → the full updated KB (same shape as extraction). */
   editProfile(input: EditProfileInput): Promise<ExtractionResult>;
+  /**
+   * Optional per-call token usage. Adapters that expose provider usage metadata
+   * populate this after each call; pure/mock adapters may return null.
+   */
+  getLastUsage?(): TokenUsage | null;
+  /** Optional model id for usage/audit logging. */
+  getModelId?(): string | null;
 }
 
 /** Default model ids per provider. Override via constructor options or env.
@@ -66,7 +79,7 @@ export interface LLMProvider {
 export const DEFAULT_MODELS = {
   anthropic: "claude-sonnet-4-6",
   openai: "gpt-5.4",
-  google: "gemini-2.5-pro",
+  google: "gemini-3.5-flash",
   deepseek: "deepseek-v4-pro",
 } as const;
 

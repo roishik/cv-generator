@@ -30,6 +30,7 @@ import {
   PageHeaderSkeleton,
 } from "@/components/ui/loading-skeletons";
 import { StyleguideThemeToggle } from "./theme-toggle";
+import { notFound } from "next/navigation";
 
 export const metadata = {
   title: "Style Guide — Tailor",
@@ -179,6 +180,7 @@ const SHADOWS = [
 // ──────────────────────────────────────────────────────────────────────────
 
 export default function StyleGuidePage() {
+  if (process.env["NODE_ENV"] === "production") notFound();
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-[1024px] space-y-20 px-6 py-12 md:px-8">

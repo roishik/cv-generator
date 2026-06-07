@@ -33,6 +33,13 @@ import { extractTextFromBuffer, MIN_TEXT_LENGTH } from "@/lib/parse/extract-text
 import { extractProfile } from "@/lib/ai/pipeline";
 import { createProvider } from "@/lib/ai/factory";
 import { resolveProvider } from "@/lib/providers/resolve-provider";
+import { assertWithinRateLimit } from "@/lib/ratelimit";
+import { assertUsageWithinCap } from "@/lib/ai/token-budget";
+import {
+  providerModel,
+  providerUsage,
+  recordLlmUsageEvent,
+} from "@/lib/usage/llm-usage";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Input validation
@@ -231,14 +238,59 @@ async function runExtractionWithCache(
   // Cache miss — call the LLM provider. Resolve the user's BYOK key (mock needs
   // none) the same way the tailoring path does, so a configured real provider
   // actually uses the stored, decrypted key instead of throwing "requires a key".
-  const { provider: providerId, apiKey } = await resolveProvider(userId);
+  assertWithinRateLimit({ kind: "llm", userId });
+  const resolved = await resolveProvider(userId, {
+    purpose: "extract",
+    allowManaged: true,
+  });
   const provider = createProvider({
-    provider: providerId,
-    ...(apiKey ? { apiKey } : {}),
+    provider: resolved.provider,
+    ...(resolved.apiKey ? { apiKey: resolved.apiKey } : {}),
   });
-  const { knowledgeBase } = await extractProfile(provider, rawText, {
-    idFor: () => randomUUID(),
-  });
+  const startedAt = Date.now();
+  let knowledgeBase: import("@/lib/schemas/knowledge-base").KnowledgeBase;
+  try {
+    ({ knowledgeBase } = await extractProfile(provider, rawText, {
+      idFor: () => randomUUID(),
+    }));
+    const usage = providerUsage(provider);
+    assertUsageWithinCap(
+      "extract",
+      usage,
+      resolved.authMode === "managed-free" ? resolved.freeTokenCap : undefined,
+    );
+    await recordLlmUsageEvent({
+      userId,
+      kind: "extract",
+      provider: provider.id,
+      model: providerModel(provider),
+      status: "ok",
+      latencyMs: Date.now() - startedAt,
+      usage,
+      meta: {
+        billing: resolved.authMode,
+        cacheHit: false,
+        freeTokenCap: resolved.freeTokenCap ?? null,
+      },
+    });
+  } catch (e) {
+    await recordLlmUsageEvent({
+      userId,
+      kind: "extract",
+      provider: provider.id,
+      model: providerModel(provider),
+      status: "error",
+      latencyMs: Date.now() - startedAt,
+      usage: providerUsage(provider),
+      meta: {
+        billing: resolved.authMode,
+        cacheHit: false,
+        error: (e as Error).message,
+        freeTokenCap: resolved.freeTokenCap ?? null,
+      },
+    });
+    throw e;
+  }
 
   // Persist the KB + child records in a single RLS-scoped transaction.
   const { kbId, cvDocId } = await withUser(userId, async (tx) => {

@@ -19,7 +19,7 @@ describe("describeProvider", () => {
 
   it("covers anthropic / google / deepseek", () => {
     expect(describeProvider("anthropic").label).toBe("Anthropic · claude-sonnet-4-6");
-    expect(describeProvider("google").label).toBe("Google · gemini-2.5-pro");
+    expect(describeProvider("google").label).toBe("Google · gemini-3.5-flash");
     expect(describeProvider("deepseek").label).toBe("DeepSeek · deepseek-v4-pro");
   });
 });

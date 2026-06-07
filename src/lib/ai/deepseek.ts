@@ -7,6 +7,7 @@ import type {
   LLMProvider,
   ExtractProfileInput,
   EditProfileInput,
+  TokenUsage,
   TailorInput,
   ValidateKeyResult,
 } from "./provider";
@@ -26,6 +27,7 @@ import { buildTailorPrompts } from "./prompts/tailor";
 import { EDIT_PROFILE_SYSTEM_PROMPT, buildEditProfileUserPrompt } from "./prompts/edit-profile";
 import { parseWithRepair } from "./structured";
 import { toStrictJsonSchema } from "./strict-schema";
+import { assertEstimatedPromptWithinCap } from "./token-budget";
 
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 
@@ -40,6 +42,7 @@ export class DeepSeekProvider implements LLMProvider {
   readonly id = "deepseek" as const;
   private readonly client: OpenAI;
   private readonly model: string;
+  private lastUsage: TokenUsage | null = null;
 
   constructor(opts: DeepSeekOptions) {
     this.client = new OpenAI({
@@ -84,13 +87,23 @@ export class DeepSeekProvider implements LLMProvider {
         },
       },
     });
+    this.addUsage(
+      res.usage?.prompt_tokens ?? 0,
+      res.usage?.completion_tokens ?? 0,
+      res.usage?.total_tokens,
+    );
     const content = res.choices[0]?.message?.content;
     if (!content) throw new Error("deepseek: empty response content");
     return content;
   }
 
   async extractProfile(input: ExtractProfileInput) {
+    this.lastUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     const user = buildExtractionUserPrompt(input.rawText);
+    assertEstimatedPromptWithinCap(
+      "extract",
+      `${EXTRACTION_SYSTEM_PROMPT}\n\n${user}`,
+    );
     const first = await this.callJsonSchema(
       EXTRACT_PROFILE_JSON_SCHEMA,
       EXTRACTION_SYSTEM_PROMPT,
@@ -106,7 +119,9 @@ export class DeepSeekProvider implements LLMProvider {
   }
 
   async tailor(input: TailorInput) {
+    this.lastUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     const { system, user } = buildTailorPrompts(input);
+    assertEstimatedPromptWithinCap("tailor", `${system}\n\n${user}`);
     const first = await this.callJsonSchema(TAILOR_CV_JSON_SCHEMA, system, user);
     return parseWithRepair(this.id, "tailor", TailorResult, first, (msg) =>
       this.callJsonSchema(
@@ -118,7 +133,12 @@ export class DeepSeekProvider implements LLMProvider {
   }
 
   async editProfile(input: EditProfileInput) {
+    this.lastUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     const user = buildEditProfileUserPrompt(input);
+    assertEstimatedPromptWithinCap(
+      "edit-profile",
+      `${EDIT_PROFILE_SYSTEM_PROMPT}\n\n${user}`,
+    );
     const first = await this.callJsonSchema(
       EXTRACT_PROFILE_JSON_SCHEMA,
       EDIT_PROFILE_SYSTEM_PROMPT,
@@ -130,6 +150,24 @@ export class DeepSeekProvider implements LLMProvider {
         EDIT_PROFILE_SYSTEM_PROMPT,
         `${user}\n\n${buildRepairPrompt(msg)}`,
       ),
+    );
+  }
+
+  getLastUsage(): TokenUsage | null {
+    return this.lastUsage;
+  }
+
+  getModelId(): string {
+    return this.model;
+  }
+
+  private addUsage(prompt: number, completion: number, total?: number): void {
+    if (!this.lastUsage) return;
+    this.lastUsage.promptTokens += Math.max(0, prompt);
+    this.lastUsage.completionTokens += Math.max(0, completion);
+    this.lastUsage.totalTokens += Math.max(
+      0,
+      total ?? Math.max(0, prompt) + Math.max(0, completion),
     );
   }
 }

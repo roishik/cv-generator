@@ -21,6 +21,7 @@ import { validateUpload } from "@/lib/parse/validate-upload";
 import { getStorage } from "@/lib/storage/local-fs";
 import { withUser } from "@/lib/db/rls";
 import { resumeUploads } from "@/lib/db/schema";
+import { assertWithinRateLimit, RateLimitError } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
   // 1. Auth check.
@@ -29,6 +30,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id as string;
+  try {
+    assertWithinRateLimit({ kind: "upload", userId });
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      return NextResponse.json(
+        { error: e.message },
+        {
+          status: 429,
+          headers: { "Retry-After": String(e.retryAfterSeconds) },
+        },
+      );
+    }
+    throw e;
+  }
 
   // 2. Parse multipart body.
   let formData: FormData;

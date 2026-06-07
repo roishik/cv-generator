@@ -75,7 +75,10 @@ export async function runTailoring(
 ): Promise<TailorToJobResult> {
   const userId = await requireSession();
   const input = RunTailoringInput.parse(raw);
-  const { provider, apiKey } = await resolveProvider(userId);
+  const { provider, apiKey, authMode, freeTokenCap } = await resolveProvider(userId, {
+    purpose: "tailor",
+    allowManaged: true,
+  });
 
   return tailorToJob({
     userId,
@@ -86,6 +89,8 @@ export async function runTailoring(
     ...(input.instructions ? { instructions: input.instructions } : {}),
     provider,
     ...(apiKey ? { apiKey } : {}),
+    billingMode: authMode,
+    ...(freeTokenCap ? { freeTokenCap } : {}),
   });
 }
 

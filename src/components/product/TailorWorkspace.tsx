@@ -61,7 +61,6 @@ import {
   reRenderDocument,
   getDownloadUrl,
   recommendTemplateForJd,
-  verifyVersionTruthfulness,
   recomputeDiff,
   setProfilePhoto,
   getOriginalResume,
@@ -237,13 +236,11 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         setServerFits(res.fits);
         setNeedsReduction(res.needsReduction ?? null);
         setArtifactId(res.artifact?.id ?? null);
-        // Recompute diff + truthfulness against the edited content.
-        const [d, t] = await Promise.all([
-          recomputeDiff(docId, nextData).catch(() => null),
-          verifyVersionTruthfulness(docId, nextData).catch(() => null),
-        ]);
+        // Recompute the baseline↔edited diff deterministically. Per product
+        // decision, we do NOT rerun truthfulness verification for manual edits.
+        const d = await recomputeDiff(docId, nextData).catch(() => null);
         if (d) setDiff(d);
-        if (t) setTruthfulness(t);
+        setTruthfulness(null);
         if (res.fits) toast.success("Saved.", { duration: 2000 });
       } catch (e) {
         toast.error((e as Error).message ?? "Couldn't save that edit.");
