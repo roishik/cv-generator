@@ -12,6 +12,11 @@ FROM deps AS builder
 WORKDIR /app
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Build-time placeholders only. Runtime values come from Cloud Run Secret Manager.
+ENV AUTH_SECRET=build-time-placeholder-auth-secret-32
+ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cvgen
+ENV STORAGE_SIGNING_SECRET=build-time-placeholder-storage-secret-32
+ENV MASTER_KEY_SECRET=build-time-placeholder-master-secret-32
 RUN pnpm build
 
 FROM mcr.microsoft.com/playwright:v1.60.0-noble AS runner
