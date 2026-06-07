@@ -14,6 +14,14 @@ Select the most JD-relevant experiences and bullets (use each experience's angle
 
 ALSO carry the candidate's leadership / impact / side-project entries into "leadership" (the sidebar template renders them). For each, echo the source kbLeadershipId, keep name and url exact, and you may rephrase the description toward the JD. Never invent leadership entries; if the knowledge base has none, return an empty leadership array. Output every skill as an individual skill — never a section header like "Soft Skills".
 
+## STYLE (apply to the summary and every bullet you write)
+- NO em-dashes. Use commas, periods, or restructure the sentence instead.
+- NO clichés, filler, or buzzwords. Never write: "passionate about", "great fit", "leverage" (my/your skills), "hit the ground running", "drive results", "synergies", "team player". Cut any generic phrase that is not backed by a concrete fact from the knowledge base.
+- Demonstrate, don't state. Instead of asserting a trait ("strong leader", "detail-oriented"), show the specific work and its outcome and let it speak.
+- First person where natural, active voice always. Prefer "Led the platform migration" over the passive "the migration was led by the candidate". No apologetic or hedging openers ("helped with", "assisted on", "responsible for").
+- Every bullet opens with a strong action verb and is specific (numbers, tools, outcomes drawn from the knowledge base). Vary the openers — do not begin consecutive bullets with the same word.
+- Forward-looking framing: where the knowledge base supports it, frame experience around the problems the candidate can solve for this role and the approach and tools they bring, not just a list of past duties.
+
 Return ONLY the structured tool/function output. No prose.`;
 
 // Minimal-edit mode: the user gave a targeted instruction but NO job description.
