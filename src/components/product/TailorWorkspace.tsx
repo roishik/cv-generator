@@ -338,6 +338,11 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
       toast.error("Fix the one-page overflow before exporting.");
       return;
     }
+    const blockingTruthErrors = (truthfulness?.flags ?? []).some((f) => f.severity === "error");
+    if (blockingTruthErrors) {
+      toast.error("Fix truthfulness errors before exporting this JD-generated version.");
+      return;
+    }
     setExporting(true);
     try {
       const { url } = await getDownloadUrl(artifactId);
@@ -351,7 +356,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
     } finally {
       setExporting(false);
     }
-  }, [artifactId, serverFits, initial.label]);
+  }, [artifactId, serverFits, initial.label, truthfulness]);
 
   // ── Auto-fit assist (re-render is the deterministic tighten ladder) ──
   const handleAutoFit = React.useCallback(async () => {

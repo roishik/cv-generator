@@ -1,8 +1,9 @@
 /**
  * Storage interface — the single abstraction over binary blob persistence.
  *
- * The LocalFsStorage adapter (local-fs.ts) implements this for local dev.
- * A future SupabaseStorage / S3 adapter will be a drop-in replacement.
+ * LocalFsStorage (local-fs.ts) implements this for local dev.
+ * GcsStorage (gcs.ts) implements this for Cloud Run / production.
+ * A future S3/Supabase adapter can remain a drop-in replacement.
  *
  * Object keys are always namespaced: `{userId}/{uuid}.{ext}` so that
  * a future cloud adapter can enforce bucket-level path policies.
@@ -47,7 +48,7 @@ export interface Storage {
   /**
    * Mint a short-lived access token / signed URL for the given key.
    * The LocalFsStorage returns a local HMAC-signed token served by
-   * `/api/files/[token]`. A cloud adapter returns a pre-signed S3/GCS URL.
+   * `/api/files/[token]`. Cloud adapters return pre-signed object URLs.
    *
    * @param key        the object key
    * @param ttlSeconds token lifetime in seconds (default 3600)

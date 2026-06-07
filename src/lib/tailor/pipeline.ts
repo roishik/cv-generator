@@ -35,7 +35,7 @@ import { assertUsageWithinCap } from "@/lib/ai/token-budget";
 import { renderCvToPdf } from "@/lib/pdf/render-pdf";
 import { runQaChecks, type QaReport } from "@/lib/qa/assertions";
 import { defaultThemeFor } from "@/lib/render-engine/themes/registry";
-import { getStorage } from "@/lib/storage/local-fs";
+import { getStorage } from "@/lib/storage/factory";
 import { assertWithinRateLimit } from "@/lib/ratelimit";
 import {
   providerModel,

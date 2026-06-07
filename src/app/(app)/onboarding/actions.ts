@@ -28,7 +28,7 @@ import {
   kbSkills,
   cvDocuments,
 } from "@/lib/db/schema";
-import { getStorage } from "@/lib/storage/local-fs";
+import { getStorage } from "@/lib/storage/factory";
 import { extractTextFromBuffer, MIN_TEXT_LENGTH } from "@/lib/parse/extract-text";
 import { extractProfile } from "@/lib/ai/pipeline";
 import { createProvider } from "@/lib/ai/factory";

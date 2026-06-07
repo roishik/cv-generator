@@ -24,7 +24,7 @@ import { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import { resolveProvider } from "@/lib/providers/resolve-provider";
 import { renderCvToPdf } from "@/lib/pdf/render-pdf";
 import { runQaChecks } from "@/lib/qa/assertions";
-import { getStorage } from "@/lib/storage/local-fs";
+import { getStorage } from "@/lib/storage/factory";
 import { tailorToJob, type TailorToJobResult } from "@/lib/tailor/pipeline";
 import {
   loadKnowledgeBase,

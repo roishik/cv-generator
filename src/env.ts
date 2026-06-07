@@ -91,7 +91,11 @@ const envSchema = z
         const hasGoogle = !!data.GOOGLE_CLIENT_ID && !!data.GOOGLE_CLIENT_SECRET;
         const noDevLogin = data.AUTH_DEV_LOGIN === false;
         const noMock = data.AI_PROVIDER !== "mock";
-        return hasGoogle && noDevLogin && noMock;
+        const strongSecrets =
+          data.AUTH_SECRET.length >= 32 &&
+          data.STORAGE_SIGNING_SECRET.length >= 32 &&
+          data.MASTER_KEY_SECRET.length >= 32;
+        return hasGoogle && noDevLogin && noMock && strongSecrets;
       }
       // In dev/test: Google creds optional when AUTH_DEV_LOGIN=true
       if (data.AUTH_DEV_LOGIN) return true;
@@ -100,7 +104,17 @@ const envSchema = z
     },
     {
       message:
-        "Invalid production env: require Google OAuth creds, AUTH_DEV_LOGIN=false, and AI_PROVIDER!=mock",
+        "Invalid production env: require Google OAuth creds, AUTH_DEV_LOGIN=false, AI_PROVIDER!=mock, and 32+ char secrets",
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.STORAGE_DRIVER !== "gcs") return true;
+      return !!data.GCS_BUCKET_UPLOADS && !!data.GCS_BUCKET_ARTIFACTS;
+    },
+    {
+      message:
+        "STORAGE_DRIVER=gcs requires GCS_BUCKET_UPLOADS and GCS_BUCKET_ARTIFACTS",
     },
   );
 

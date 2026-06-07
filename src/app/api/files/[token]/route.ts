@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { verifyToken } from "@/lib/storage/token";
-import { getStorage } from "@/lib/storage/local-fs";
+import { getStorage } from "@/lib/storage/factory";
 import { getEnv } from "@/env";
 
 export async function GET(
@@ -22,11 +22,14 @@ export async function GET(
 ) {
   const { token: rawToken } = await params;
   const token = decodeURIComponent(rawToken);
+  const env = getEnv();
+  if (env.STORAGE_DRIVER !== "local") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   // 1. Verify HMAC token.
   let key: string;
   try {
-    const env = getEnv();
     const payload = verifyToken(env.STORAGE_SIGNING_SECRET, token);
     key = payload.key;
   } catch (e) {

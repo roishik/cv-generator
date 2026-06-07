@@ -18,7 +18,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { validateUpload } from "@/lib/parse/validate-upload";
-import { getStorage } from "@/lib/storage/local-fs";
+import { getStorage } from "@/lib/storage/factory";
 import { withUser } from "@/lib/db/rls";
 import { resumeUploads } from "@/lib/db/schema";
 import { assertWithinRateLimit, RateLimitError } from "@/lib/ratelimit";
