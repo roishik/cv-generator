@@ -159,6 +159,43 @@ from `app/**`, `lib/db/**`, or `lib/auth/**`.
 
 ---
 
+## Research-backed roadmap (`research/FINDINGS.md`)
+
+Harvested from the `MadsLorentzen/ai-job-search` investigation (the repo's
+career-domain knowledge + three deterministic algorithms; see
+`research/FINDINGS.md`, gitignored). The throughline is Tailor's signature move:
+**soft prompt + hard code guarantee** — port the prose knowledge into prompts,
+then promote every mechanically-checkable rule to a deterministic guardrail
+(mirroring `truthfulness.ts`).
+
+**Tier 1 + Tier 2 — implemented.**
+
+| # | Item | Where |
+|---|---|---|
+| 1.1 | Writing-style rules (em-dash/cliché ban, demonstrate-don't-state, active voice, varied openers, forward-looking) | `lib/ai/prompts/tailor.ts` `## STYLE` |
+| 1.2 | Interview-backtrack test + OK/Flag/Never reframe taxonomy | `lib/ai/prompts/tailor.ts` |
+| 1.3 | `style-lint.ts` deterministic writing-style guardrail (warnings only) | `lib/ai/style-lint.ts` → workspace StyleReview |
+| 1.4 | Relevance-weighted cut suggestions when the fit ladder exhausts | `lib/tailor/suggest-cuts.ts` → `needsReduction.cutSuggestions` |
+| 2.1 | Deterministic JD↔CV fit assessment (skills/experience + verdict + gaps) | `lib/tailor/fit-score.ts` → workspace FitScore |
+| 2.2 | Role-type framing + per-section page budget | `lib/ai/prompts/tailor.ts` `## FRAMING` |
+| 2.3 | Cross-source consistency `reconcile()` (pure detector; not yet wired — see 3.1) | `lib/ai/reconcile.ts` |
+
+**Tier 3 — forward roadmap** (bigger lifts; sequence after Tier 1–2):
+
+| # | Feature | Scope | Recommendation |
+|---|---|---|---|
+| 3.1 | Multi-source profile ingestion | Build the KB from LinkedIn export + diplomas + reference letters + past CVs (additive, provenance-tagged). Wires up the already-built `reconcile.ts` (2.3) and pairs with the design-extraction vision. Source: `setup.md`, `expand.md`. | **PLAN** — biggest lift; do first. |
+| 3.2 | Skill-gap / "upskill" heatmap | Aggregate the per-tailor "JD wants X; not in KB" gaps (now also emitted by `fit-score.ts`) into a frequency-weighted heatmap; keep any web-search learning plan out of the deterministic core. Source: `upskill/SKILL.md`. | **CONSIDER** — cheap heatmap; defer the web-search plan. |
+| 3.3 | Cover-letter generation | One-page tailored cover letter alongside the CV. Needs a NEW LLM call type + a new render template. Source: `06-cover-letter-templates.md`. | **DEFER** — breaks the "2–3 calls" discipline; do deliberately, not opportunistically. |
+| 3.4 | Opt-in reviewer/critique mode | Drafter → fresh-context reviewer → revise (structured old/new edits). ~2× tailor cost. Source: `apply.md`. | **CONSIDER (opt-in only)** — never the default; surface the extra cost. |
+
+**Tier 4 — explicitly NOT adopted:** LaTeX rendering, the Danish job-portal
+scrapers, `salary_lookup.py`, the headless-Gemini sub-agent, and the unbounded
+multi-call CC-agent workflow style (all conflict with Tailor's web/multi-tenant,
+deterministic, budgeted-call model). See `research/FINDINGS.md` §5–§6.
+
+---
+
 ## Non-negotiables
 
 1. TypeScript strict — no `any`, no `// @ts-ignore` without a comment explaining why.
