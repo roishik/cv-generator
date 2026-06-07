@@ -36,6 +36,7 @@ export default async function WorkspacePage({
     diff: (doc.diff as StructuredDiff) ?? null,
     truthfulness: (doc.truthfulness as TruthfulnessReport) ?? null,
     warnings: doc.warnings ?? [],
+    fitAssessment: doc.fitAssessment,
     hasArtifact: !!doc.artifact,
     artifactId: doc.artifact?.id ?? null,
     serverFits: doc.artifact ? true : null,

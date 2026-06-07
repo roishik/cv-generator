@@ -34,6 +34,7 @@ import {
 import { recommendTemplate } from "@/lib/tailor/template-heuristic";
 import { verifyTruthfulness, type TruthfulnessReport } from "@/lib/ai/truthfulness";
 import { suggestCuts, type CutSuggestion } from "@/lib/tailor/suggest-cuts";
+import { computeFitAssessment, type FitAssessment } from "@/lib/tailor/fit-score";
 import { computeStructuredDiff, type StructuredDiff } from "@/lib/tailor/diff";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,6 +109,8 @@ export interface TailoredVersionView {
   warnings: string[];
   diff: unknown;
   truthfulness: unknown;
+  /** Deterministic JD↔CV fit estimate (recomputed from KB + the stored JD). */
+  fitAssessment: FitAssessment | null;
   artifact: { id: string; byteSize: number; pageCount: number } | null;
 }
 
@@ -129,6 +132,26 @@ export async function getTailoredVersion(
       .from(artifacts)
       .where(eq(artifacts.cvDocumentId, doc.id))
       .limit(1);
+
+    // Recompute the deterministic fit estimate (finding 2.1) from the KB + the
+    // stored JD so it shows on reload too. Best-effort: null if either is absent.
+    let fitAssessment: FitAssessment | null = null;
+    try {
+      let jdText = "";
+      if (doc.jobDescriptionId) {
+        const [jd] = await tx
+          .select({ rawText: jobDescriptions.rawText })
+          .from(jobDescriptions)
+          .where(eq(jobDescriptions.id, doc.jobDescriptionId))
+          .limit(1);
+        jdText = jd?.rawText ?? "";
+      }
+      const kb = await loadKnowledgeBase(tx, userId);
+      fitAssessment = computeFitAssessment(kb.knowledgeBase, jdText);
+    } catch {
+      fitAssessment = null;
+    }
+
     return {
       id: doc.id,
       kind: doc.kind,
@@ -142,6 +165,7 @@ export async function getTailoredVersion(
       warnings: (doc.warnings as string[]) ?? [],
       diff: doc.diff,
       truthfulness: doc.truthfulness,
+      fitAssessment,
       artifact: artifact
         ? { id: artifact.id, byteSize: artifact.byteSize, pageCount: artifact.pageCount }
         : null,

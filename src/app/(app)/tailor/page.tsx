@@ -18,6 +18,7 @@ export default async function TailorPage() {
     diff: null,
     truthfulness: null,
     warnings: [],
+    fitAssessment: null,
     hasArtifact: false,
     artifactId: null,
     serverFits: null,

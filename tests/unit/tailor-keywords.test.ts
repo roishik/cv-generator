@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { keywordSet, tokenize, overlapCount } from "@/lib/tailor/keywords";
+import { keywordSet, tokenize, overlapCount, stem, stemSet } from "@/lib/tailor/keywords";
 
 describe("keywords (shared JD↔CV tokenizer)", () => {
   it("lower-cases and drops stopwords + 1-char noise", () => {
@@ -36,5 +36,22 @@ describe("keywords (shared JD↔CV tokenizer)", () => {
     const a = keywordSet("kubernetes platform pipeline");
     const b = keywordSet("kubernetes data pipeline");
     expect(overlapCount(a, b)).toBe(2); // kubernetes + pipeline
+  });
+
+  it("stem collides common morphological variants", () => {
+    expect(stem("developers")).toBe(stem("developer"));
+    expect(stem("developing")).toBe(stem("develop"));
+    expect(stem("experiments")).toBe(stem("experimentation"));
+    expect(stem("owned")).toBe(stem("owns"));
+  });
+
+  it("stem never mangles short tech tokens", () => {
+    expect(stem("api")).toBe("api");
+    expect(stem("ml")).toBe("ml");
+    expect(stem("ai")).toBe("ai");
+  });
+
+  it("stemSet stems each token", () => {
+    expect(stemSet("developers developing").has("develop")).toBe(true);
   });
 });

@@ -31,6 +31,7 @@ import { tailorCv, type TailorCvOutput } from "@/lib/ai/pipeline";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
 import { lintStyle, type StyleReport } from "@/lib/ai/style-lint";
 import { suggestCuts, type CutSuggestion } from "./suggest-cuts";
+import { computeFitAssessment, type FitAssessment } from "./fit-score";
 import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import type { TailorRationaleItem } from "@/lib/schemas/llm-contracts";
 import { assertUsageWithinCap } from "@/lib/ai/token-budget";
@@ -98,6 +99,8 @@ export interface TailorToJobSuccess {
   truthfulness: TruthfulnessReport;
   /** Deterministic writing-style review (warnings only; never blocks export). */
   style: StyleReport;
+  /** Deterministic JD↔CV fit estimate (null for instructions-only runs). */
+  fitAssessment: FitAssessment | null;
   /** Present when fits === true. */
   artifact?: {
     id: string;
@@ -160,6 +163,12 @@ async function runInTx(
     (await loadBaselineCvData(tx, userId, knowledgeBaseId)) ??
     projectBaselineCvData(knowledgeBase);
 
+  // Deterministic JD↔CV fit estimate (finding 2.1). Measured against the KB (the
+  // candidate's true superset of facts), so it is stable across tailorings and
+  // reflects what the candidate can honestly claim. Null for instructions-only
+  // runs (no real JD to assess).
+  const fitAssessment = computeFitAssessment(knowledgeBase, jd);
+
   // 2) Deterministic template selection (explicit override wins).
   const tpl = resolveTemplate(jd, input.templateId);
   const templateId = tpl.templateId;
@@ -212,6 +221,7 @@ async function runInTx(
         ? truthfulness
         : { ok: true, flags: [] },
       style,
+      fitAssessment,
       ...(artifact
         ? {
             artifact: {
@@ -387,6 +397,7 @@ async function runInTx(
       diff,
       truthfulness: tailored.truthfulness,
       style: tailored.style,
+      fitAssessment,
       needsReduction: {
         reason: pdfResult.reason,
         suggestion: pdfResult.suggestion,
@@ -440,6 +451,7 @@ async function runInTx(
     diff,
     truthfulness: tailored.truthfulness,
     style: tailored.style,
+    fitAssessment,
     artifact: {
       id: artifact!.id,
       storagePath,

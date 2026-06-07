@@ -26,6 +26,8 @@ export const STOPWORDS: ReadonlySet<string> = new Set([
   "responsibilities", "responsible", "skills", "skill", "knowledge", "etc",
   "including", "include", "well", "good", "great", "help", "helping", "new",
   "using", "use", "used", "within", "must", "ideal", "ideally", "you'll", "we're",
+  // seniority / generic-verb boilerplate that adds noise to fit gaps
+  "senior", "junior", "mid", "lead", "run", "drive", "among", "various", "daily",
 ]);
 
 const TOKEN_RE = /[a-z0-9][a-z0-9+#]*/g;
@@ -56,4 +58,32 @@ export function overlapCount(a: Set<string>, b: Set<string>): number {
   let n = 0;
   for (const t of a) if (b.has(t)) n++;
   return n;
+}
+
+// Suffixes stripped by `stem`, ordered longest/most-specific first so only ONE
+// (the best) is removed. Deliberately conservative — this is a recall aid for
+// keyword overlap (developers≈developer, experiments≈experimentation), not a
+// linguistic stemmer.
+const STEM_SUFFIXES = [
+  "ization", "isation", "ities", "ation", "ously", "ment", "ness",
+  "ies", "ied", "ing", "ers", "ize", "ise", "ed", "es", "er", "ly", "s",
+];
+
+/**
+ * Reduce a token to a crude stem so morphological variants collide. Strips at
+ * most one trailing suffix and only when ≥3 characters remain (so short tech
+ * tokens like "api"/"ml" are never mangled).
+ */
+export function stem(token: string): string {
+  for (const suf of STEM_SUFFIXES) {
+    if (token.length - suf.length >= 3 && token.endsWith(suf)) {
+      return token.slice(0, token.length - suf.length);
+    }
+  }
+  return token;
+}
+
+/** Unique stemmed significant tokens of `text`. */
+export function stemSet(text: string): Set<string> {
+  return new Set(tokenize(text).map(stem));
 }

@@ -53,12 +53,14 @@ import { OnePageFitIndicator } from "@/components/product/OnePageFitIndicator";
 import { TailorDiffPanel } from "@/components/product/TailorDiffPanel";
 import { TruthfulnessReview } from "@/components/product/TruthfulnessReview";
 import { StyleReview } from "@/components/product/StyleReview";
+import { FitScore } from "@/components/product/FitScore";
 import { readPath, writePath } from "@/lib/tailor/cv-path";
 import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import type { StructuredDiff, FieldDiff, DiffKind } from "@/lib/tailor/diff";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
 import { lintStyle } from "@/lib/ai/style-lint";
 import type { CutSuggestion } from "@/lib/tailor/suggest-cuts";
+import type { FitAssessment } from "@/lib/tailor/fit-score";
 import {
   runTailoring,
   reRenderDocument,
@@ -80,6 +82,7 @@ export interface TailorWorkspaceInitial {
   diff: StructuredDiff | null;
   truthfulness: TruthfulnessReport | null;
   warnings: string[];
+  fitAssessment: FitAssessment | null;
   hasArtifact: boolean;
   artifactId: string | null;
   serverFits: boolean | null;
@@ -108,6 +111,9 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
     initial.truthfulness,
   );
   const [warnings, setWarnings] = React.useState<string[]>(initial.warnings);
+  const [fitAssessment, setFitAssessment] = React.useState<FitAssessment | null>(
+    initial.fitAssessment,
+  );
   const [artifactId, setArtifactId] = React.useState<string | null>(initial.artifactId);
   const [serverFits, setServerFits] = React.useState<boolean | null>(initial.serverFits);
   const [needsReduction, setNeedsReduction] = React.useState<{
@@ -210,6 +216,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
       setDiff(res.diff);
       setTruthfulness(res.truthfulness);
       setWarnings(res.warnings ?? []);
+      setFitAssessment(res.fitAssessment ?? null);
       setTemplateId(res.templateId);
       setServerFits(res.fits);
       setNeedsReduction(res.needsReduction ?? null);
@@ -521,6 +528,14 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
           <Wand2 className="h-4 w-4" aria-hidden />
           {tailored ? "Tailor again" : "Tailor CV"}
         </Button>
+      )}
+
+      {/* JD↔CV fit estimate (deterministic, finding 2.1) */}
+      {tailored && fitAssessment && (
+        <div className="space-y-1.5">
+          <h3 className="text-xs font-medium tracking-[0.02em] text-foreground">Job fit</h3>
+          <FitScore fit={fitAssessment} />
+        </div>
       )}
 
       {warnings.length > 0 && (
