@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/playwright:v1.60.0-noble AS deps
 WORKDIR /app
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.20.0 --activate
 
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -25,7 +25,7 @@ ENV HOSTNAME="0.0.0.0"
 ENV PORT=8080
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.20.0 --activate
 
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
