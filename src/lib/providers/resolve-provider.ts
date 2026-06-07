@@ -19,7 +19,7 @@ import "server-only";
 
 import { and, eq } from "drizzle-orm";
 import { withUser } from "@/lib/db/rls";
-import { providerKeys, usageEvents } from "@/lib/db/schema";
+import { profiles, providerKeys, usageEvents } from "@/lib/db/schema";
 import { decryptKey } from "@/lib/crypto/envelope";
 import type { ProviderId } from "@/lib/ai/provider";
 import { getEnv } from "@/env";
@@ -48,13 +48,17 @@ export async function resolveProvider(
 ): Promise<ResolvedProvider> {
   const env = getEnv();
   const envProvider = env.AI_PROVIDER as ProviderId;
-  if (envProvider === "mock") return { provider: "mock", authMode: "mock" };
+  const selectedProvider = await resolveSelectedProvider(userId, envProvider);
+  if (selectedProvider === "mock" && env.NODE_ENV === "production") {
+    throw new Error("Mock AI provider is disabled in production.");
+  }
+  if (selectedProvider === "mock") return { provider: "mock", authMode: "mock" };
 
   const key = await withUser(userId, async (tx) => {
     const [row] = await tx
       .select()
       .from(providerKeys)
-      .where(and(eq(providerKeys.userId, userId), eq(providerKeys.provider, envProvider)))
+      .where(and(eq(providerKeys.userId, userId), eq(providerKeys.provider, selectedProvider)))
       .limit(1);
     return row;
   });
@@ -63,14 +67,14 @@ export async function resolveProvider(
     const managedEnabled =
       !!opts.allowManaged &&
       (opts.purpose === "extract" || opts.purpose === "tailor");
-    const managedKey = managedKeyFor(envProvider, env);
+    const managedKey = managedKeyFor(selectedProvider, env);
     if (managedEnabled && managedKey) {
       const kind = opts.purpose === "extract" ? "extract" : "tailor";
       const freeUsed = await managedFreeUsed(userId, kind);
       if (!freeUsed) {
         const freeTokenCap = await computeManagedFreeTokenCap(userId, kind);
         return {
-          provider: envProvider,
+          provider: selectedProvider,
           apiKey: managedKey,
           authMode: "managed-free",
           freeTokenCap,
@@ -78,7 +82,7 @@ export async function resolveProvider(
       }
     }
     throw new Error(
-      `No ${envProvider} API key on file. Add one in Settings before continuing.`,
+      `No ${selectedProvider} API key on file. Add one in Settings before continuing.`,
     );
   }
 
@@ -89,7 +93,33 @@ export async function resolveProvider(
     keyVersion: key.keyVersion,
   });
 
-  return { provider: envProvider, apiKey, authMode: "byok" };
+  return { provider: selectedProvider, apiKey, authMode: "byok" };
+}
+
+async function resolveSelectedProvider(
+  userId: string,
+  fallback: ProviderId,
+): Promise<ProviderId> {
+  if (fallback === "mock") return "mock";
+  const [profile] = await withUser(userId, (tx) =>
+    tx
+      .select({ defaultProvider: profiles.defaultProvider })
+      .from(profiles)
+      .where(eq(profiles.userId, userId))
+      .limit(1),
+  );
+  const selected = profile?.defaultProvider;
+  return isProviderId(selected) ? selected : fallback;
+}
+
+function isProviderId(value: unknown): value is ProviderId {
+  return (
+    value === "anthropic" ||
+    value === "openai" ||
+    value === "google" ||
+    value === "deepseek" ||
+    value === "mock"
+  );
 }
 
 function managedKeyFor(provider: ProviderId, env: ReturnType<typeof getEnv>): string | undefined {

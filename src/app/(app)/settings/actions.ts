@@ -187,9 +187,16 @@ export async function setActiveProvider(rawProvider: string): Promise<{ ok: bool
 
   await withUser(userId, (tx) =>
     tx
-      .update(profiles)
-      .set({ defaultProvider: provider, updatedAt: new Date() })
-      .where(eq(profiles.userId, userId)),
+      .insert(profiles)
+      .values({
+        userId,
+        defaultProvider: provider,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: profiles.userId,
+        set: { defaultProvider: provider, updatedAt: new Date() },
+      }),
   );
 
   return { ok: true };
