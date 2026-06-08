@@ -93,6 +93,23 @@ export interface TailorWorkspaceInitial {
 
 type Tab = "job" | "preview" | "changes";
 
+function handleWorkspaceActionError(
+  err: unknown,
+  fallbackMessage: string,
+): void {
+  const message = err instanceof Error ? err.message : String(err);
+  if (
+    message.includes("failed-to-find-server-action") ||
+    message.includes("was not found on the server") ||
+    message.includes("Server Action")
+  ) {
+    toast.error("Tailor was just updated. Refreshing this page so actions work again.");
+    window.setTimeout(() => window.location.reload(), 800);
+    return;
+  }
+  toast.error(message || fallbackMessage);
+}
+
 export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }) {
   const [jd, setJd] = React.useState("");
   const [instructions, setInstructions] = React.useState("");
@@ -154,7 +171,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
       setLabel(next);
       toast.success("Renamed.");
     } catch (e) {
-      toast.error((e as Error).message ?? "Rename failed.");
+      handleWorkspaceActionError(e, "Rename failed.");
     } finally {
       setRenaming(false);
     }
@@ -237,7 +254,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         window.history.replaceState(null, "", `/workspace/${res.cvDocumentId}`);
       }
     } catch (e) {
-      toast.error((e as Error).message ?? "Tailoring failed.");
+      handleWorkspaceActionError(e, "Tailoring failed.");
     } finally {
       setGenerating(false);
     }
@@ -266,7 +283,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         setTruthfulness(null);
         if (res.fits) toast.success("Saved.", { duration: 2000 });
       } catch (e) {
-        toast.error((e as Error).message ?? "Couldn't save that edit.");
+        handleWorkspaceActionError(e, "Couldn't save that edit.");
       } finally {
         setSaving(false);
       }
@@ -287,7 +304,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         if (nextTailored && docId) await persistEdit(nextTailored);
         toast.success("Photo updated.");
       } catch (e) {
-        toast.error((e as Error).message ?? "Couldn't save the photo.");
+        handleWorkspaceActionError(e, "Couldn't save the photo.");
       }
     },
     [tailored, docId, persistEdit],
@@ -375,7 +392,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
       a.click();
       toast.success("PDF ready.");
     } catch (e) {
-      toast.error((e as Error).message ?? "Export failed.");
+      handleWorkspaceActionError(e, "Export failed.");
     } finally {
       setExporting(false);
     }
@@ -393,7 +410,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
       if (res.fits) toast.success("Tightened spacing — now fits one page.");
       else toast.warning("Still over one page — trim a low-priority bullet.");
     } catch (e) {
-      toast.error((e as Error).message ?? "Auto-fit failed.");
+      handleWorkspaceActionError(e, "Auto-fit failed.");
     } finally {
       setSaving(false);
     }
