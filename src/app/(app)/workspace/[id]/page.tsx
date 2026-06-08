@@ -5,6 +5,7 @@ import type { StructuredDiff } from "@/lib/tailor/diff";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
 import { describeProvider } from "@/lib/ai/describe-provider";
 import { getEnv } from "@/env";
+import type { ProviderId } from "@/lib/ai/provider";
 
 export const metadata = { title: "Workspace — Lapel" };
 
@@ -19,6 +20,7 @@ export default async function WorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const providerLabel = await resolveProviderLabel();
 
   const { getTailoredVersion, getWorkspaceBaseline } = await import("../../tailor/actions");
   const [doc, base] = await Promise.all([
@@ -41,7 +43,7 @@ export default async function WorkspacePage({
     artifactId: doc.artifact?.id ?? null,
     serverFits: doc.artifact ? true : null,
     label: doc.label,
-    providerLabel: describeProvider(getEnv().AI_PROVIDER).label,
+    providerLabel,
   };
 
   return (
@@ -49,4 +51,16 @@ export default async function WorkspacePage({
       <TailorWorkspace initial={initial} />
     </div>
   );
+}
+
+async function resolveProviderLabel(): Promise<string> {
+  try {
+    const { listProviderKeys } = await import("../../settings/actions");
+    const keys = await listProviderKeys();
+    const active = keys.find((k) => k.isActive && k.last4);
+    if (active) return describeProvider(active.provider as ProviderId).label;
+  } catch {
+    // Fall back to the configured free/default provider.
+  }
+  return describeProvider(getEnv().AI_PROVIDER).label;
 }

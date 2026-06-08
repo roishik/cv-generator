@@ -1,6 +1,7 @@
 import { TailorWorkspace, type TailorWorkspaceInitial } from "@/components/product/TailorWorkspace";
 import { describeProvider } from "@/lib/ai/describe-provider";
 import { getEnv } from "@/env";
+import type { ProviderId } from "@/lib/ai/provider";
 
 export const metadata = { title: "Tailor — Lapel" };
 
@@ -9,6 +10,7 @@ export const metadata = { title: "Tailor — Lapel" };
  * never blank, then hands off to the persistent split-pane workspace.
  */
 export default async function TailorPage() {
+  const providerLabel = await resolveProviderLabel();
   let initial: TailorWorkspaceInitial = {
     cvDocumentId: null,
     hasKnowledgeBase: false,
@@ -23,7 +25,7 @@ export default async function TailorPage() {
     artifactId: null,
     serverFits: null,
     label: "Untitled draft",
-    providerLabel: describeProvider(getEnv().AI_PROVIDER).label,
+    providerLabel,
   };
 
   try {
@@ -44,4 +46,16 @@ export default async function TailorPage() {
       <TailorWorkspace initial={initial} />
     </div>
   );
+}
+
+async function resolveProviderLabel(): Promise<string> {
+  try {
+    const { listProviderKeys } = await import("../settings/actions");
+    const keys = await listProviderKeys();
+    const active = keys.find((k) => k.isActive && k.last4);
+    if (active) return describeProvider(active.provider as ProviderId).label;
+  } catch {
+    // Fall back to the configured free/default provider.
+  }
+  return describeProvider(getEnv().AI_PROVIDER).label;
 }
