@@ -35,7 +35,7 @@ const PROVIDERS = [
     id: "google",
     label: "Google",
     hint: "Begins with AIza…",
-    models: ["gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro"],
+    models: ["gemini-3.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
   },
   {
     id: "deepseek",
@@ -51,7 +51,33 @@ type ProviderId = "anthropic" | "openai" | "google" | "deepseek";
 // Mock active badge
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ProviderBadge({ provider }: { provider: ProviderDescription }) {
+function ProviderBadge({
+  provider,
+  activeKey,
+}: {
+  provider: ProviderDescription;
+  activeKey?: ProviderKeyInfo;
+}) {
+  const activeMeta = PROVIDERS.find((p) => p.id === activeKey?.provider);
+  if (activeMeta && activeKey?.last4) {
+    return (
+      <div
+        className="flex items-start gap-3 rounded-lg border border-spruce-200 bg-spruce-50 p-4"
+        role="status"
+        aria-label={`${activeMeta.label} provider active`}
+      >
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-spruce-600" aria-hidden />
+        <div>
+          <p className="text-[13px] font-medium text-spruce-700">
+            {activeMeta.label} is your active provider
+          </p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Tailor uses this key to extract resumes, edit your profile, and tailor CVs.
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (provider.isMock) {
     return (
       <div
@@ -74,19 +100,18 @@ function ProviderBadge({ provider }: { provider: ProviderDescription }) {
   }
   return (
     <div
-      className="flex items-start gap-3 rounded-lg border border-spruce-200 bg-spruce-50 p-4"
+      className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4"
       role="status"
-      aria-label={`${provider.name} provider active`}
+      aria-label="Managed free starter provider"
     >
-      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-spruce-600" aria-hidden />
+      <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
       <div>
-        <p className="text-[13px] font-medium text-spruce-700">
-          {provider.name} active · {provider.model}
+        <p className="text-[13px] font-medium text-amber-800">
+          Free starter uses {provider.name} · {provider.model}
         </p>
         <p className="mt-0.5 text-[12px] text-muted-foreground">
-          Tailoring and extraction use your {provider.name} key (
-          <code className="font-mono text-[11px]">AI_PROVIDER={provider.provider}</code>
-          ). Add or remove keys below.
+          Add your own key below and set it active to keep extracting, editing,
+          and tailoring after the included free uses.
         </p>
       </div>
     </div>
@@ -305,10 +330,11 @@ export function ByokKeysPanel({ initialKeys, provider }: ByokKeysPanelProps) {
   }
 
   const hasAnyKey = keys.length > 0;
+  const activeKey = keys.find((k) => k.isActive);
 
   return (
     <div className="space-y-4">
-      <ProviderBadge provider={provider} />
+      <ProviderBadge provider={provider} activeKey={activeKey} />
 
       {/* Provider cards */}
       <div className="space-y-3" role="list" aria-label="Configured AI providers">

@@ -26,10 +26,16 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { extractProfileFromUpload, extractProfileFromText } from "@/app/(app)/onboarding/actions";
 import type { ExtractionActionResult } from "@/app/(app)/onboarding/actions";
 import type { ProviderDescription } from "@/lib/ai/describe-provider";
+import {
+  saveProviderKey,
+  setActiveProvider,
+  type ProviderKeyInfo,
+} from "@/app/(app)/settings/actions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step rail
@@ -38,8 +44,17 @@ import type { ProviderDescription } from "@/lib/ai/describe-provider";
 const STEPS = [
   { label: "Upload", description: "Your resume" },
   { label: "Review", description: "Extracted profile" },
-  { label: "AI key", description: "Optional — skip for mock" },
+  { label: "AI key", description: "Choose provider" },
 ];
+
+const PROVIDERS = [
+  { id: "anthropic", label: "Anthropic", hint: "Begins with sk-ant-..." },
+  { id: "openai", label: "OpenAI", hint: "Begins with sk-..." },
+  { id: "google", label: "Google", hint: "Begins with AIza..." },
+  { id: "deepseek", label: "DeepSeek", hint: "Begins with sk-..." },
+] as const;
+
+type RealProviderId = (typeof PROVIDERS)[number]["id"];
 
 function StepRail({ current }: { current: number }) {
   return (
@@ -423,12 +438,22 @@ function Step2Review({ result, onContinue }: Step2Props) {
 interface Step3Props {
   onFinish: () => void;
   provider: ProviderDescription;
-  /** True when a usable provider is already configured (real key on file, or mock). */
-  keyReady: boolean;
+  initialKeys: ProviderKeyInfo[];
 }
 
-function Step3ApiKey({ onFinish, provider, keyReady }: Step3Props) {
+function Step3ApiKey({ onFinish, provider, initialKeys }: Step3Props) {
   const router = useRouter();
+  const [keys, setKeys] = useState<ProviderKeyInfo[]>(initialKeys);
+  const [selectedProvider, setSelectedProvider] = useState<RealProviderId>(
+    (keys.find((k) => k.isActive)?.provider as RealProviderId | undefined) ??
+      "anthropic",
+  );
+  const [apiKey, setApiKey] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const selectedMeta = PROVIDERS.find((p) => p.id === selectedProvider)!;
+  const selectedKey = keys.find((k) => k.provider === selectedProvider);
+  const hasSelectedKey = !!selectedKey?.last4;
 
   function goToSettings() {
     router.push("/settings");
@@ -437,120 +462,165 @@ function Step3ApiKey({ onFinish, provider, keyReady }: Step3Props) {
     router.push("/tailor");
   }
 
-  // A real provider key is already configured → don't nag for a key. Confirm
-  // they're set and send them straight to tailoring.
-  if (keyReady && !provider.isMock) {
-    return (
-      <div className="space-y-6">
-        <div className="text-center">
-          <h1 className="font-serif text-3xl font-semibold leading-tight text-foreground">
-            You&apos;re all set
-          </h1>
-          <p className="mt-2 text-[14px] text-muted-foreground">
-            Your profile is ready and your AI provider is connected.
-          </p>
-        </div>
+  function handleSaveKey() {
+    if (!apiKey.trim()) {
+      toast.error(`Paste your ${selectedMeta.label} API key first.`);
+      return;
+    }
+    startTransition(async () => {
+      const saved = await saveProviderKey(selectedProvider, apiKey.trim());
+      if (!saved.ok) {
+        toast.error(saved.error ?? `Could not save ${selectedMeta.label} key.`);
+        return;
+      }
+      const active = await setActiveProvider(selectedProvider);
+      if (!active.ok) {
+        toast.error(active.error ?? `Could not activate ${selectedMeta.label}.`);
+        return;
+      }
+      setKeys((prev) => [
+        ...prev
+          .filter((k) => k.provider !== selectedProvider)
+          .map((k) => ({ ...k, isActive: false })),
+        {
+          provider: selectedProvider,
+          last4: apiKey.trim().slice(-4),
+          validatedAt: new Date().toISOString(),
+          isActive: true,
+        },
+      ]);
+      setApiKey("");
+      toast.success(`${selectedMeta.label} key saved and set as active.`);
+    });
+  }
 
-        <div className="rounded-lg border border-spruce-200 bg-spruce-50 p-4">
-          <p className="text-[13px] font-medium text-spruce-700">
-            {provider.name} connected · {provider.model}
-          </p>
-          <p className="mt-1 text-[12px] text-muted-foreground">
-            Extraction and tailoring use your {provider.name} key (encrypted at
-            rest, never logged).
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <Button onClick={startTailoring} className="w-full" size="lg">
-            Start tailoring
-            <ChevronRight className="ml-2 h-4 w-4" aria-hidden />
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full text-muted-foreground"
-            onClick={onFinish}
-          >
-            Go to dashboard
-          </Button>
-        </div>
-
-        <p className="text-center text-[12px] text-muted-foreground">
-          Manage or switch keys anytime in{" "}
-          <button
-            onClick={goToSettings}
-            className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Settings
-          </button>
-          .
-        </p>
-      </div>
-    );
+  function handleUseSavedKey() {
+    startTransition(async () => {
+      const active = await setActiveProvider(selectedProvider);
+      if (!active.ok) {
+        toast.error(active.error ?? `Could not activate ${selectedMeta.label}.`);
+        return;
+      }
+      setKeys((prev) =>
+        prev.map((k) => ({ ...k, isActive: k.provider === selectedProvider })),
+      );
+      toast.success(`${selectedMeta.label} set as active provider.`);
+    });
   }
 
   return (
     <div className="space-y-6">
       <div className="text-center">
         <h1 className="font-serif text-3xl font-semibold leading-tight text-foreground">
-          Bring your AI key
+          Choose your AI provider
         </h1>
         <p className="mt-2 text-[14px] text-muted-foreground">
-          Tailor uses your own AI API key. Keys are AES-256-GCM encrypted and
+          Tailor uses your API key to extract your resume, edit your profile,
+          and tailor CVs to job descriptions. Keys are AES-256-GCM encrypted and
           never logged.
         </p>
       </div>
 
-      {/* Provider notice — reflects the actually-configured provider */}
-      {provider.isMock ? (
+      <div className="rounded-lg border border-spruce-200 bg-spruce-50 p-4">
+        <p className="text-[13px] font-medium text-spruce-700">
+          Your first extraction and first CV generation are included.
+        </p>
+        <p className="mt-1 text-[12px] text-muted-foreground">
+          After the free starter uses, add your own provider key below to keep
+          tailoring. The provider you choose here becomes your active BYOK
+          provider.
+        </p>
+      </div>
+
+      {provider.isMock && (
         <div className="rounded-lg border border-[hsl(var(--ai-bg))] bg-[hsl(var(--ai-bg))] p-4">
-          <p className="text-[13px] font-medium text-ai">Running on mock provider</p>
+          <p className="text-[13px] font-medium text-ai">Local mock mode active</p>
           <p className="mt-1 text-[12px] text-muted-foreground">
-            Locally, tailoring works out of the box with{" "}
-            <code className="font-mono text-[11px]">AI_PROVIDER=mock</code>. Add
-            a real key to use Claude, GPT, or Gemini.
-          </p>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <p className="text-[13px] font-medium text-amber-800">
-            {provider.name} selected — add your key
-          </p>
-          <p className="mt-1 text-[12px] text-muted-foreground">
-            Add your {provider.name} API key in Settings to enable extraction and
-            tailoring.
+            In local development, Tailor can run without real AI calls. Production
+            free starter runs use Tailor&apos;s managed Google key.
           </p>
         </div>
       )}
 
-      {/* Provider logos placeholder */}
-      <div className="flex items-center justify-center gap-4">
-        {["Anthropic", "OpenAI", "Google"].map((name) => (
-          <div
-            key={name}
-            className="flex h-10 items-center justify-center rounded-lg border border-border bg-card px-4 text-[12px] font-medium text-muted-foreground"
-          >
-            {name}
-          </div>
-        ))}
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="AI provider">
+        {PROVIDERS.map((p) => {
+          const selected = selectedProvider === p.id;
+          const saved = keys.some((k) => k.provider === p.id && !!k.last4);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => setSelectedProvider(p.id)}
+              className={cn(
+                "rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                selected
+                  ? "border-primary bg-primary/5"
+                  : "border-border bg-card hover:border-primary/40",
+              )}
+            >
+              <span className="block text-[13px] font-semibold text-foreground">
+                {p.label}
+              </span>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                {saved ? "Key saved" : p.hint}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="flex flex-col gap-3">
-        <Button onClick={goToSettings} className="w-full" size="lg">
-          Add API key in Settings
+      <div className="space-y-3">
+        {hasSelectedKey ? (
+          <div className="rounded-md bg-secondary px-3 py-2.5 text-[12px] text-muted-foreground">
+            {selectedMeta.label} key saved ending in{" "}
+            <code className="font-mono">...{selectedKey?.last4}</code>
+            {selectedKey?.isActive ? " · Active" : ""}
+          </div>
+        ) : (
+          <Input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={`${selectedMeta.label} API key (${selectedMeta.hint})`}
+            className="font-mono text-[13px]"
+            autoComplete="off"
+            spellCheck={false}
+            aria-label={`${selectedMeta.label} API key`}
+          />
+        )}
+
+        <Button
+          onClick={hasSelectedKey ? handleUseSavedKey : handleSaveKey}
+          className="w-full"
+          size="lg"
+          disabled={isPending || (!hasSelectedKey && !apiKey.trim())}
+        >
+          {isPending
+            ? "Verifying..."
+            : hasSelectedKey
+              ? `Use ${selectedMeta.label}`
+              : `Save ${selectedMeta.label} key`}
           <ChevronRight className="ml-2 h-4 w-4" aria-hidden />
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Button onClick={startTailoring} variant="outline" className="w-full">
+          Start tailoring
         </Button>
         <Button
           variant="ghost"
           className="w-full text-muted-foreground"
           onClick={onFinish}
         >
-          {provider.isMock ? "Skip for now — use mock locally" : "Continue to dashboard"}
+          Continue to dashboard
         </Button>
       </div>
 
       <p className="text-center text-[12px] text-muted-foreground">
-        You can always add a key later from{" "}
+        You can also manage keys later from{" "}
         <button
           onClick={goToSettings}
           className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -569,10 +639,10 @@ function Step3ApiKey({ onFinish, provider, keyReady }: Step3Props) {
 
 export function OnboardingWizard({
   provider,
-  keyReady,
+  initialKeys,
 }: {
   provider: ProviderDescription;
-  keyReady: boolean;
+  initialKeys: ProviderKeyInfo[];
 }) {
   const [step, setStep] = useState(0);
   const [extractionResult, setExtractionResult] = useState<ExtractionActionResult | null>(null);
@@ -602,7 +672,11 @@ export function OnboardingWizard({
             <Step2Review result={extractionResult} onContinue={handleReviewContinue} />
           )}
           {step === 2 && (
-            <Step3ApiKey onFinish={handleFinish} provider={provider} keyReady={keyReady} />
+            <Step3ApiKey
+              onFinish={handleFinish}
+              provider={provider}
+              initialKeys={initialKeys}
+            />
           )}
         </div>
 
