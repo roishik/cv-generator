@@ -36,11 +36,13 @@ export class GoogleProvider implements LLMProvider {
   readonly id = "google" as const;
   private readonly client: GoogleGenAI;
   private readonly model: string;
+  private lastModelUsed: string;
   private lastUsage: TokenUsage | null = null;
 
   constructor(opts: GoogleOptions) {
     this.client = new GoogleGenAI({ apiKey: opts.apiKey });
     this.model = opts.model ?? DEFAULT_MODELS.google;
+    this.lastModelUsed = this.model;
   }
 
   async validateKey(): Promise<ValidateKeyResult> {
@@ -58,16 +60,7 @@ export class GoogleProvider implements LLMProvider {
     system: string,
     userPrompt: string,
   ): Promise<string> {
-    const res = await this.client.models.generateContent({
-      model: this.model,
-      contents: userPrompt,
-      config: {
-        systemInstruction: system,
-        responseMimeType: "application/json",
-        // Our JSON Schema is structurally compatible with Gemini's responseSchema.
-        responseSchema: schema.schema as never,
-      },
-    });
+    const res = await this.generateWithFallback(schema, system, userPrompt);
     this.addUsage({
       promptTokenCount: res.usageMetadata?.promptTokenCount ?? 0,
       candidatesTokenCount: res.usageMetadata?.candidatesTokenCount ?? 0,
@@ -139,7 +132,43 @@ export class GoogleProvider implements LLMProvider {
   }
 
   getModelId(): string {
-    return this.model;
+    return this.lastModelUsed;
+  }
+
+  private async generateWithFallback(
+    schema: { schema: object },
+    system: string,
+    userPrompt: string,
+  ) {
+    try {
+      this.lastModelUsed = this.model;
+      return await this.generate(schema, system, userPrompt, this.model);
+    } catch (err) {
+      if (this.model === "gemini-3.5-flash" && isTransientGoogleOverload(err)) {
+        const fallback = "gemini-2.5-flash";
+        this.lastModelUsed = fallback;
+        return this.generate(schema, system, userPrompt, fallback);
+      }
+      throw friendlyGoogleError(err);
+    }
+  }
+
+  private async generate(
+    schema: { schema: object },
+    system: string,
+    userPrompt: string,
+    model: string,
+  ) {
+    return this.client.models.generateContent({
+      model,
+      contents: userPrompt,
+      config: {
+        systemInstruction: system,
+        responseMimeType: "application/json",
+        // Our JSON Schema is structurally compatible with Gemini's responseSchema.
+        responseSchema: schema.schema as never,
+      },
+    });
   }
 
   private addUsage(meta: {
@@ -159,4 +188,26 @@ export class GoogleProvider implements LLMProvider {
 
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.name : "unknown error";
+}
+
+function isTransientGoogleOverload(err: unknown): boolean {
+  const status = typeof err === "object" && err !== null && "status" in err
+    ? (err as { status?: unknown }).status
+    : undefined;
+  const text = err instanceof Error ? err.message : String(err);
+  return (
+    status === 503 ||
+    text.includes('"code":503') ||
+    text.includes("UNAVAILABLE") ||
+    text.toLowerCase().includes("high demand")
+  );
+}
+
+function friendlyGoogleError(err: unknown): Error {
+  if (isTransientGoogleOverload(err)) {
+    return new Error(
+      "Google Gemini is temporarily overloaded. Please try again in a minute.",
+    );
+  }
+  return err instanceof Error ? err : new Error("Google AI request failed.");
 }

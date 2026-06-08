@@ -74,7 +74,7 @@ const ReRenderInput = z.object({
  */
 export async function runTailoring(
   raw: z.input<typeof RunTailoringInput>,
-): Promise<TailorToJobResult> {
+): Promise<TailorToJobResult | { ok: false; error: string }> {
   const userId = await requireSession();
   const input = RunTailoringInput.parse(raw);
   const { provider, apiKey, authMode, freeTokenCap } = await resolveProvider(userId, {
@@ -82,18 +82,41 @@ export async function runTailoring(
     allowManaged: true,
   });
 
-  return tailorToJob({
-    userId,
-    jobDescription: input.jobDescription ?? "",
-    ...(input.templateId ? { templateId: input.templateId } : {}),
-    ...(input.company ? { company: input.company } : {}),
-    ...(input.title ? { title: input.title } : {}),
-    ...(input.instructions ? { instructions: input.instructions } : {}),
-    provider,
-    ...(apiKey ? { apiKey } : {}),
-    billingMode: authMode,
-    ...(freeTokenCap ? { freeTokenCap } : {}),
-  });
+  try {
+    return await tailorToJob({
+      userId,
+      jobDescription: input.jobDescription ?? "",
+      ...(input.templateId ? { templateId: input.templateId } : {}),
+      ...(input.company ? { company: input.company } : {}),
+      ...(input.title ? { title: input.title } : {}),
+      ...(input.instructions ? { instructions: input.instructions } : {}),
+      provider,
+      ...(apiKey ? { apiKey } : {}),
+      billingMode: authMode,
+      ...(freeTokenCap ? { freeTokenCap } : {}),
+    });
+  } catch (e) {
+    return { ok: false, error: userFacingTailorError(e) };
+  }
+}
+
+function userFacingTailorError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (
+    message.includes("Google Gemini is temporarily overloaded") ||
+    message.includes("high demand") ||
+    message.includes("UNAVAILABLE") ||
+    message.includes('"code":503')
+  ) {
+    return "Google Gemini is temporarily overloaded. Please try again in a minute.";
+  }
+  if (message.includes("No ") && message.includes("API key on file")) {
+    return message;
+  }
+  if (message.includes("Token budget exceeded") || message.includes("Request is too large")) {
+    return message;
+  }
+  return "Tailoring failed. Please try again.";
 }
 
 export interface TailoredVersionView {

@@ -211,6 +211,10 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         templateId,
         ...(instructions.trim() ? { instructions: instructions.trim() } : {}),
       });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
       setDocId(res.cvDocumentId);
       setTailored(res.cvData);
       setDiff(res.diff);
