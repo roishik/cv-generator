@@ -50,7 +50,7 @@ gcloud run deploy tailor \
   --concurrency 5 \
   --timeout 300 \
   --allow-unauthenticated \
-  --set-env-vars NODE_ENV=production,NEXTAUTH_URL=https://tailor.roishikler.com,AUTH_DEV_LOGIN=false,AI_PROVIDER=google,STORAGE_DRIVER=gcs,GCS_BUCKET_UPLOADS=tailor-cv-generator-uploads,GCS_BUCKET_ARTIFACTS=tailor-cv-generator-artifacts,GCS_BUCKET_PHOTOS=tailor-cv-generator-photos,CLOUD_SQL_CONNECTION_NAME=tailor-cv-generator:europe-west1:tailor-db \
+  --set-env-vars NODE_ENV=production,NEXTAUTH_URL=https://tailor.roishikler.com,AUTH_TRUST_HOST=true,AUTH_DEV_LOGIN=false,AI_PROVIDER=google,STORAGE_DRIVER=gcs,GCS_BUCKET_UPLOADS=tailor-cv-generator-uploads,GCS_BUCKET_ARTIFACTS=tailor-cv-generator-artifacts,GCS_BUCKET_PHOTOS=tailor-cv-generator-photos,CLOUD_SQL_CONNECTION_NAME=tailor-cv-generator:europe-west1:tailor-db \
   --set-secrets DATABASE_URL=DATABASE_URL:latest,APP_DATABASE_URL=APP_DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,STORAGE_SIGNING_SECRET=STORAGE_SIGNING_SECRET:latest,MASTER_KEY_SECRET=MASTER_KEY_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest
 ```
 
