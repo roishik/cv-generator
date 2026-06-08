@@ -73,6 +73,39 @@ gcloud run jobs create tailor-migrate \
 gcloud run jobs execute tailor-migrate --region europe-west1 --wait
 ```
 
+## Runtime IAM
+
+The Cloud Run runtime service account needs:
+
+```bash
+SA=tailor-run@tailor-cv-generator.iam.gserviceaccount.com
+
+gcloud projects add-iam-policy-binding tailor-cv-generator \
+  --member="serviceAccount:$SA" \
+  --role="roles/cloudsql.client"
+
+gcloud projects add-iam-policy-binding tailor-cv-generator \
+  --member="serviceAccount:$SA" \
+  --role="roles/secretmanager.secretAccessor"
+
+gcloud storage buckets add-iam-policy-binding gs://tailor-cv-generator-uploads \
+  --member="serviceAccount:$SA" \
+  --role="roles/storage.objectAdmin"
+
+gcloud storage buckets add-iam-policy-binding gs://tailor-cv-generator-artifacts \
+  --member="serviceAccount:$SA" \
+  --role="roles/storage.objectAdmin"
+
+gcloud storage buckets add-iam-policy-binding gs://tailor-cv-generator-photos \
+  --member="serviceAccount:$SA" \
+  --role="roles/storage.objectAdmin"
+
+# Required for GCS V4 signed download URLs from Cloud Run.
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --member="serviceAccount:$SA" \
+  --role="roles/iam.serviceAccountTokenCreator"
+```
+
 ## Domain Mapping
 
 ```bash
