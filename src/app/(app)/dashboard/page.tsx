@@ -47,16 +47,42 @@ async function DocumentListContainer() {
     createdAt: string;
     hasArtifact: boolean;
   }> = [];
+  let hasKnowledgeBase = false;
 
   try {
-    const { listTailoredVersions } = await import("../tailor/actions");
-    versions = await listTailoredVersions();
+    const { listTailoredVersions, getWorkspaceBaseline } = await import("../tailor/actions");
+    const [versionRows, baseline] = await Promise.all([
+      listTailoredVersions(),
+      getWorkspaceBaseline(),
+    ]);
+    versions = versionRows;
+    hasKnowledgeBase = baseline.hasKnowledgeBase;
   } catch {
     // DB not running locally or first-run before migrations — show empty state.
     versions = [];
+    hasKnowledgeBase = false;
   }
 
   if (versions.length === 0) {
+    if (hasKnowledgeBase) {
+      return (
+        <EmptyState
+          heading="Ready to tailor your first CV"
+          description="Your profile is already built. Paste a job description in Tailor to generate your first one-page CV, or upload a newer resume to replace your profile."
+          action={
+            <div className="flex flex-col items-center gap-2 sm:flex-row">
+              <Button asChild>
+                <Link href="/tailor">Go to Tailor</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/onboarding">Upload a new resume</Link>
+              </Button>
+            </div>
+          }
+        />
+      );
+    }
+
     return (
       <EmptyState
         heading="Tailor your first CV"
