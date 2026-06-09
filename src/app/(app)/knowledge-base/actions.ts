@@ -19,22 +19,14 @@ import { asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth/guards";
 import { withUser } from "@/lib/db/rls";
-import {
-  knowledgeBases,
-  kbExperiences,
-  kbEducation,
-  kbSkills,
-} from "@/lib/db/schema";
+import { knowledgeBases, kbExperiences, kbEducation, kbSkills } from "@/lib/db/schema";
 import { KbAngle } from "@/lib/schemas/knowledge-base";
 import { createProvider } from "@/lib/ai/factory";
 import { resolveProvider } from "@/lib/providers/resolve-provider";
 import { assertWithinRateLimit } from "@/lib/ratelimit";
 import { assertUsageWithinCap } from "@/lib/ai/token-budget";
-import {
-  providerModel,
-  providerUsage,
-  recordLlmUsageEvent,
-} from "@/lib/usage/llm-usage";
+import { providerModel, providerUsage, recordLlmUsageEvent } from "@/lib/usage/llm-usage";
+import { recordAnalyticsEventSafe } from "@/lib/analytics/events";
 import { EditableKnowledgeBase, type EditableKnowledgeBase as EditableKb } from "./schema";
 import { toLlmKb, fromExtraction } from "./ai-edit-map";
 
@@ -144,6 +136,7 @@ export interface EditWithAiResult {
  * only for resolving the user's BYOK key; no DB writes happen here.
  */
 export async function editProfileWithAi(raw: unknown): Promise<EditWithAiResult> {
+  const actionStartedAt = Date.now();
   const parsed = EditWithAiInput.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -190,8 +183,29 @@ export async function editProfileWithAi(raw: unknown): Promise<EditWithAiResult>
       usage,
       meta: { billing: authMode },
     });
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "profile_ai_edit",
+      durationMs: Date.now() - actionStartedAt,
+      meta: {
+        provider,
+        billing: authMode,
+        experienceCount: parsed.data.current.experiences.length,
+        educationCount: parsed.data.current.education.length,
+      },
+    });
     return { ok: true, data: fromExtraction(result, parsed.data.current) };
   } catch (e) {
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "profile_ai_edit",
+      status: "error",
+      durationMs: Date.now() - actionStartedAt,
+      meta: {
+        reason: "edit_failed",
+        errorType: (e as Error).name,
+      },
+    });
     return { ok: false, error: (e as Error).message };
   }
 }
@@ -207,6 +221,7 @@ export interface SaveKbResult {
  * client sends back are preserved so provenance links survive.
  */
 export async function saveKnowledgeBase(raw: unknown): Promise<SaveKbResult> {
+  const startedAt = Date.now();
   const parsed = EditableKnowledgeBase.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -296,8 +311,29 @@ export async function saveKnowledgeBase(raw: unknown): Promise<SaveKbResult> {
       if (skillRows.length > 0) await tx.insert(kbSkills).values(skillRows);
     });
 
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "profile_saved",
+      durationMs: Date.now() - startedAt,
+      meta: {
+        experienceCount: input.experiences.length,
+        educationCount: input.education.length,
+        professionalSkillCount: input.skills.professional.length,
+        softSkillCount: input.skills.soft.length,
+      },
+    });
     return { ok: true };
   } catch (e) {
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "profile_saved",
+      status: "error",
+      durationMs: Date.now() - startedAt,
+      meta: {
+        reason: "save_failed",
+        errorType: (e as Error).name,
+      },
+    });
     return { ok: false, error: (e as Error).message };
   }
 }

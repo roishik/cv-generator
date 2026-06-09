@@ -34,6 +34,7 @@ import {
 import { recommendTemplate } from "@/lib/tailor/template-heuristic";
 import { verifyTruthfulness, type TruthfulnessReport } from "@/lib/ai/truthfulness";
 import { computeStructuredDiff, type StructuredDiff } from "@/lib/tailor/diff";
+import { recordAnalyticsEventSafe } from "@/lib/analytics/events";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Input validation
@@ -47,10 +48,9 @@ const RunTailoringInput = z
     title: z.string().max(200).optional(),
     instructions: z.string().max(4000).optional(),
   })
-  .refine(
-    (v) => (v.jobDescription?.trim().length ?? 0) >= 30 || !!v.instructions?.trim(),
-    { message: "Provide a job description (≥30 chars) or instructions to the AI." },
-  );
+  .refine((v) => (v.jobDescription?.trim().length ?? 0) >= 30 || !!v.instructions?.trim(), {
+    message: "Provide a job description (≥30 chars) or instructions to the AI.",
+  });
 
 const ReRenderInput = z.object({
   cvDocumentId: z.string().uuid(),
@@ -73,25 +73,61 @@ const ReRenderInput = z.object({
 export async function runTailoring(
   raw: z.input<typeof RunTailoringInput>,
 ): Promise<TailorToJobResult> {
+  const startedAt = Date.now();
   const userId = await requireSession();
-  const input = RunTailoringInput.parse(raw);
-  const { provider, apiKey, authMode, freeTokenCap } = await resolveProvider(userId, {
-    purpose: "tailor",
-    allowManaged: true,
-  });
+  try {
+    const input = RunTailoringInput.parse(raw);
+    const { provider, apiKey, authMode, freeTokenCap } = await resolveProvider(userId, {
+      purpose: "tailor",
+      allowManaged: true,
+    });
 
-  return tailorToJob({
-    userId,
-    jobDescription: input.jobDescription ?? "",
-    ...(input.templateId ? { templateId: input.templateId } : {}),
-    ...(input.company ? { company: input.company } : {}),
-    ...(input.title ? { title: input.title } : {}),
-    ...(input.instructions ? { instructions: input.instructions } : {}),
-    provider,
-    ...(apiKey ? { apiKey } : {}),
-    billingMode: authMode,
-    ...(freeTokenCap ? { freeTokenCap } : {}),
-  });
+    const result = await tailorToJob({
+      userId,
+      jobDescription: input.jobDescription ?? "",
+      ...(input.templateId ? { templateId: input.templateId } : {}),
+      ...(input.company ? { company: input.company } : {}),
+      ...(input.title ? { title: input.title } : {}),
+      ...(input.instructions ? { instructions: input.instructions } : {}),
+      provider,
+      ...(apiKey ? { apiKey } : {}),
+      billingMode: authMode,
+      ...(freeTokenCap ? { freeTokenCap } : {}),
+    });
+
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "tailor_cv",
+      status: result.fits && result.truthfulness.ok ? "ok" : "warning",
+      durationMs: Date.now() - startedAt,
+      meta: {
+        provider,
+        billing: authMode,
+        templateId: result.templateId,
+        fits: result.fits,
+        cacheHit: result.cacheHit,
+        llmCalled: result.llmCalled,
+        warningsCount: result.warnings.length,
+        truthfulnessFlags: result.truthfulness.flags.length,
+        hadJobDescription: (input.jobDescription?.trim().length ?? 0) >= 30,
+        hadInstructions: !!input.instructions?.trim(),
+      },
+    });
+
+    return result;
+  } catch (e) {
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "tailor_cv",
+      status: "error",
+      durationMs: Date.now() - startedAt,
+      meta: {
+        reason: "tailor_failed",
+        errorType: (e as Error).name,
+      },
+    });
+    throw e;
+  }
 }
 
 export interface TailoredVersionView {
@@ -276,6 +312,7 @@ export interface ReRenderResult {
 export async function reRenderDocument(
   raw: z.input<typeof ReRenderInput>,
 ): Promise<ReRenderResult> {
+  const startedAt = Date.now();
   const userId = await requireSession();
   const input = ReRenderInput.parse(raw);
 
@@ -290,7 +327,7 @@ export async function reRenderDocument(
   });
   if (!doc) throw new Error("Document not found");
 
-  const templateId = (input.templateId ?? (doc.templateId as TemplateId));
+  const templateId = input.templateId ?? (doc.templateId as TemplateId);
   const pdf = await renderCvToPdf(input.cvData, templateId);
 
   if (!pdf.fits) {
@@ -304,6 +341,17 @@ export async function reRenderDocument(
           tailorCacheKey: null,
         })
         .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.id, input.cvDocumentId)));
+    });
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "rerender_cv",
+      status: "warning",
+      durationMs: Date.now() - startedAt,
+      meta: {
+        templateId,
+        fits: false,
+        reason: "needs_reduction",
+      },
     });
     return {
       fits: false,
@@ -350,6 +398,19 @@ export async function reRenderDocument(
       })
       .returning({ id: artifacts.id });
     return a!.id;
+  });
+
+  await recordAnalyticsEventSafe({
+    userId,
+    kind: "rerender_cv",
+    status: "ok",
+    durationMs: Date.now() - startedAt,
+    meta: {
+      templateId,
+      fits: true,
+      byteSize: pdf.pdf.byteLength,
+      pageCount: 1,
+    },
   });
 
   return {
@@ -435,9 +496,8 @@ const SetPhotoInput = z.object({
  * Every future tailored CV inherits it via the baseline carry-forward in
  * tailorCv, so the photo persists across tailoring + PDF export. RLS-scoped.
  */
-export async function setProfilePhoto(
-  raw: z.input<typeof SetPhotoInput>,
-): Promise<{ ok: true }> {
+export async function setProfilePhoto(raw: z.input<typeof SetPhotoInput>): Promise<{ ok: true }> {
+  const startedAt = Date.now();
   const userId = await requireSession();
   const { dataUrl } = SetPhotoInput.parse(raw);
   if (!/^data:image\/(png|jpe?g|webp);base64,/.test(dataUrl)) {
@@ -460,6 +520,12 @@ export async function setProfilePhoto(
       .set({ cvData: data as unknown as Record<string, unknown> })
       .where(eq(cvDocuments.id, baseline.id));
   });
+  await recordAnalyticsEventSafe({
+    userId,
+    kind: "profile_photo_set",
+    durationMs: Date.now() - startedAt,
+    meta: { byteSize: dataUrl.length },
+  });
   return { ok: true };
 }
 
@@ -467,9 +533,11 @@ export async function setProfilePhoto(
  * Deterministic template recommendation for a pasted JD (heuristic, 0 LLM).
  * Drives the "Detected role / recommended template" chips before generation.
  */
-export async function recommendTemplateForJd(
-  jobDescription: string,
-): Promise<{ templateId: TemplateId; reason: string; signals: { clean: number; sidebar: number } }> {
+export async function recommendTemplateForJd(jobDescription: string): Promise<{
+  templateId: TemplateId;
+  reason: string;
+  signals: { clean: number; sidebar: number };
+}> {
   await requireSession();
   const rec = recommendTemplate(jobDescription ?? "");
   return { templateId: rec.templateId, reason: rec.reason, signals: rec.signals };
@@ -515,10 +583,7 @@ export async function recomputeDiff(
 }
 
 /** Rename a tailored document's label. RLS-scoped. */
-export async function renameVersion(
-  cvDocumentId: string,
-  label: string,
-): Promise<{ ok: boolean }> {
+export async function renameVersion(cvDocumentId: string, label: string): Promise<{ ok: boolean }> {
   z.string().uuid().parse(cvDocumentId);
   const clean = z.string().min(1).max(200).parse(label.trim());
   const userId = await requireSession();
@@ -528,6 +593,11 @@ export async function renameVersion(
       .set({ label: clean })
       .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.id, cvDocumentId))),
   );
+  await recordAnalyticsEventSafe({
+    userId,
+    kind: "version_renamed",
+    meta: { labelLength: clean.length },
+  });
   return { ok: true };
 }
 
@@ -540,6 +610,7 @@ export async function deleteVersion(cvDocumentId: string): Promise<{ ok: boolean
       .delete(cvDocuments)
       .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.id, cvDocumentId))),
   );
+  await recordAnalyticsEventSafe({ userId, kind: "version_deleted" });
   return { ok: true };
 }
 
@@ -607,6 +678,12 @@ export async function restoreVersion(
     // Render failure is non-fatal — the version still exists and can be re-rendered.
   }
 
+  await recordAnalyticsEventSafe({
+    userId,
+    kind: "version_restored",
+    meta: { templateId, sourceVersion: src.version },
+  });
+
   return { ok: true, newId };
 }
 
@@ -618,6 +695,7 @@ export async function restoreVersion(
 export async function getDownloadUrl(
   artifactId: string,
 ): Promise<{ url: string; expiresAt: number }> {
+  const startedAt = Date.now();
   z.string().uuid().parse(artifactId);
   const userId = await requireSession();
   const artifact = await withUser(userId, async (tx) => {
@@ -628,6 +706,25 @@ export async function getDownloadUrl(
       .limit(1);
     return a;
   });
-  if (!artifact) throw new Error("Artifact not found");
-  return getStorage().getSignedUrl(artifact.storagePath, 300);
+  if (!artifact) {
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "download_pdf",
+      status: "error",
+      durationMs: Date.now() - startedAt,
+      meta: { reason: "artifact_not_found" },
+    });
+    throw new Error("Artifact not found");
+  }
+  const signed = await getStorage().getSignedUrl(artifact.storagePath, 300);
+  await recordAnalyticsEventSafe({
+    userId,
+    kind: "download_pdf",
+    durationMs: Date.now() - startedAt,
+    meta: {
+      byteSize: artifact.byteSize,
+      pageCount: artifact.pageCount,
+    },
+  });
+  return signed;
 }

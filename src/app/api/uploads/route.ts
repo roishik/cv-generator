@@ -22,18 +22,35 @@ import { getStorage } from "@/lib/storage/factory";
 import { withUser } from "@/lib/db/rls";
 import { resumeUploads } from "@/lib/db/schema";
 import { assertWithinRateLimit, RateLimitError } from "@/lib/ratelimit";
+import { recordAnalyticsEventSafe } from "@/lib/analytics/events";
+import { byteSizeBucket } from "@/lib/analytics/meta";
 
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now();
   // 1. Auth check.
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id as string;
+  const recordUploadEvent = (status: "ok" | "warning" | "error", meta: Record<string, unknown>) =>
+    recordAnalyticsEventSafe({
+      userId,
+      kind: "upload_resume",
+      status,
+      durationMs: Date.now() - startedAt,
+      meta,
+    });
+
   try {
     assertWithinRateLimit({ kind: "upload", userId });
   } catch (e) {
     if (e instanceof RateLimitError) {
+      await recordUploadEvent("error", {
+        reason: "rate_limit",
+        statusCode: 429,
+        retryAfterSeconds: e.retryAfterSeconds,
+      });
       return NextResponse.json(
         { error: e.message },
         {
@@ -50,11 +67,13 @@ export async function POST(req: NextRequest) {
   try {
     formData = await req.formData();
   } catch {
+    await recordUploadEvent("error", { reason: "invalid_multipart", statusCode: 400 });
     return NextResponse.json({ error: "invalid multipart body" }, { status: 400 });
   }
 
   const file = formData.get("file");
   if (!file || typeof file === "string") {
+    await recordUploadEvent("error", { reason: "missing_file", statusCode: 400 });
     return NextResponse.json({ error: 'missing "file" field in multipart body' }, { status: 400 });
   }
   const typedFile = file as File;
@@ -62,17 +81,23 @@ export async function POST(req: NextRequest) {
   // 3. Read to Buffer.
   const arrayBuffer = await typedFile.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+  const byteSize = buffer.byteLength;
 
   // 4. Validate MIME + size.
   const validation = validateUpload(buffer, typedFile.name);
   if (!validation.ok) {
     const status = validation.error.startsWith("file too large") ? 413 : 415;
+    await recordUploadEvent("error", {
+      reason: "validation_failed",
+      statusCode: status,
+      byteSize,
+      sizeBucket: byteSizeBucket(byteSize),
+    });
     return NextResponse.json({ error: validation.error }, { status });
   }
 
   const { mimeType } = validation;
   const filename = typedFile.name;
-  const byteSize = buffer.byteLength;
 
   // 5. Compute SHA-256 of raw bytes (used as the extraction cache key).
   const sha256 = createHash("sha256").update(buffer).digest("hex");
@@ -80,23 +105,61 @@ export async function POST(req: NextRequest) {
   // 6. Store via Storage adapter.
   const objectKey = `uploads/${userId}/${randomUUID()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
   const storage = getStorage();
-  await storage.put({ key: objectKey, data: buffer, mimeType });
+  try {
+    await storage.put({ key: objectKey, data: buffer, mimeType });
+  } catch (e) {
+    await recordUploadEvent("error", {
+      reason: "storage_failed",
+      errorType: (e as Error).name,
+      mimeType,
+      byteSize,
+      sizeBucket: byteSizeBucket(byteSize),
+    });
+    throw e;
+  }
 
   // 7. Record in resume_uploads (RLS-scoped).
-  const [row] = await withUser(userId, (tx) =>
-    tx
-      .insert(resumeUploads)
-      .values({
-        userId,
-        storagePath: objectKey,
-        filename,
-        mimeType,
-        byteSize,
-        sha256,
-        status: "uploaded",
-      })
-      .returning({ id: resumeUploads.id }),
-  );
+  let row: { id: string } | undefined;
+  try {
+    [row] = await withUser(userId, (tx) =>
+      tx
+        .insert(resumeUploads)
+        .values({
+          userId,
+          storagePath: objectKey,
+          filename,
+          mimeType,
+          byteSize,
+          sha256,
+          status: "uploaded",
+        })
+        .returning({ id: resumeUploads.id }),
+    );
+  } catch (e) {
+    await recordUploadEvent("error", {
+      reason: "db_failed",
+      errorType: (e as Error).name,
+      mimeType,
+      byteSize,
+      sizeBucket: byteSizeBucket(byteSize),
+    });
+    throw e;
+  }
+  if (!row) {
+    await recordUploadEvent("error", {
+      reason: "db_empty_insert",
+      mimeType,
+      byteSize,
+      sizeBucket: byteSizeBucket(byteSize),
+    });
+    throw new Error("Upload record was not created");
+  }
+
+  await recordUploadEvent("ok", {
+    mimeType,
+    byteSize,
+    sizeBucket: byteSizeBucket(byteSize),
+  });
 
   return NextResponse.json({
     uploadId: row.id,

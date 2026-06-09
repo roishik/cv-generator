@@ -15,13 +15,12 @@ import { z } from "zod";
 const envSchema = z
   .object({
     // ── Node ──────────────────────────────────────────────────────────────────
-    NODE_ENV: z
-      .enum(["development", "test", "production"])
-      .default("development"),
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
     // ── App ───────────────────────────────────────────────────────────────────
     NEXTAUTH_URL: z.string().url().default("http://localhost:3000"),
     AUTH_SECRET: z.string().min(16, "AUTH_SECRET must be at least 16 chars"),
+    NEXT_PUBLIC_GA_MEASUREMENT_ID: z.string().optional(),
 
     // ── Auth.js Google OAuth (optional when AUTH_DEV_LOGIN=true) ─────────────
     GOOGLE_CLIENT_ID: z.string().optional(),
@@ -31,6 +30,7 @@ const envSchema = z
       .transform((v) => v === "true")
       .default("false"),
     AUTH_ALLOWED_EMAILS: z.string().optional(),
+    AUTH_ADMIN_EMAILS: z.string().optional(),
 
     // ── Database ──────────────────────────────────────────────────────────────
     DATABASE_URL: z.string().url(),
@@ -43,19 +43,13 @@ const envSchema = z
     GCS_BUCKET_UPLOADS: z.string().optional(),
     GCS_BUCKET_ARTIFACTS: z.string().optional(),
     GCS_BUCKET_PHOTOS: z.string().optional(),
-    STORAGE_SIGNING_SECRET: z
-      .string()
-      .min(16, "STORAGE_SIGNING_SECRET must be at least 16 chars"),
+    STORAGE_SIGNING_SECRET: z.string().min(16, "STORAGE_SIGNING_SECRET must be at least 16 chars"),
 
     // ── Encryption ────────────────────────────────────────────────────────────
-    MASTER_KEY_SECRET: z
-      .string()
-      .min(16, "MASTER_KEY_SECRET must be at least 16 chars"),
+    MASTER_KEY_SECRET: z.string().min(16, "MASTER_KEY_SECRET must be at least 16 chars"),
 
     // ── AI ────────────────────────────────────────────────────────────────────
-    AI_PROVIDER: z
-      .enum(["mock", "anthropic", "openai", "google", "deepseek"])
-      .default("mock"),
+    AI_PROVIDER: z.enum(["mock", "anthropic", "openai", "google", "deepseek"]).default("mock"),
     ANTHROPIC_API_KEY: z.string().optional(),
     OPENAI_API_KEY: z.string().optional(),
     GOOGLE_API_KEY: z.string().optional(),
@@ -114,8 +108,7 @@ const envSchema = z
       return !!data.GCS_BUCKET_UPLOADS && !!data.GCS_BUCKET_ARTIFACTS;
     },
     {
-      message:
-        "STORAGE_DRIVER=gcs requires GCS_BUCKET_UPLOADS and GCS_BUCKET_ARTIFACTS",
+      message: "STORAGE_DRIVER=gcs requires GCS_BUCKET_UPLOADS and GCS_BUCKET_ARTIFACTS",
     },
   );
 
@@ -127,9 +120,7 @@ function parseEnv(): Env {
     const formatted = result.error.format();
     console.error("❌  Invalid environment variables:");
     console.error(JSON.stringify(formatted, null, 2));
-    throw new Error(
-      "Invalid environment variables. Check the console for details.",
-    );
+    throw new Error("Invalid environment variables. Check the console for details.");
   }
   return result.data;
 }

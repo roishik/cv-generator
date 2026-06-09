@@ -8,17 +8,17 @@ import { z } from "zod";
 
 // Inline the schema shape for unit-testing without process.env mutation
 const envSchema = z.object({
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development"),
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   NEXTAUTH_URL: z.string().url().default("http://localhost:3000"),
   AUTH_SECRET: z.string().min(16),
+  NEXT_PUBLIC_GA_MEASUREMENT_ID: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   AUTH_DEV_LOGIN: z
     .string()
     .transform((v) => v === "true")
     .default("false"),
+  AUTH_ADMIN_EMAILS: z.string().optional(),
   DATABASE_URL: z.string().url(),
   APP_DATABASE_URL: z.string().url().optional(),
   CLOUD_SQL_CONNECTION_NAME: z.string().optional(),
@@ -29,9 +29,7 @@ const envSchema = z.object({
   GCS_BUCKET_PHOTOS: z.string().optional(),
   STORAGE_SIGNING_SECRET: z.string().min(16),
   MASTER_KEY_SECRET: z.string().min(16),
-  AI_PROVIDER: z
-    .enum(["mock", "anthropic", "openai", "google", "deepseek"])
-    .default("mock"),
+  AI_PROVIDER: z.enum(["mock", "anthropic", "openai", "google", "deepseek"]).default("mock"),
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   GOOGLE_API_KEY: z.string().optional(),

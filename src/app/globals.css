@@ -34,9 +34,11 @@
    shadcn/ui CSS variable contract (HSL triples, no hsl() wrapper)
    ────────────────────────────────────────────────────────────── */
 :root {
+  --font-fraunces: Georgia, serif;
+
   /* Background — paper-50 #FBFAF7 */
   --background: 48 33% 98%;
-  --foreground: 80 5% 10%;          /* ink-900 #1A1B19 */
+  --foreground: 80 5% 10%; /* ink-900 #1A1B19 */
 
   /* Card — pure white floats on paper bg */
   --card: 0 0% 100%;
@@ -56,10 +58,10 @@
 
   /* Muted */
   --muted: 45 24% 94%;
-  --muted-foreground: 90 3% 43%;   /* ink-500 #6B6E67 */
+  --muted-foreground: 90 3% 43%; /* ink-500 #6B6E67 */
 
   /* Accent — amber-100 tint / amber-600 text */
-  --accent: 38 86% 90%;            /* amber-100 #F8ECD4 */
+  --accent: 38 86% 90%; /* amber-100 #F8ECD4 */
   --accent-foreground: 36 86% 38%; /* amber-600 #B5740F */
 
   /* Destructive — clay #B23B2E */
@@ -77,33 +79,33 @@
   --radius: 0.625rem;
 
   /* ── Product-specific tokens (not shadcn defaults) ── */
-  --ai: 36 86% 38%;                /* amber-600 — AI/diff emphasis */
-  --ai-bg: 38 86% 90%;             /* amber-100 — AI tint */
+  --ai: 36 86% 38%; /* amber-600 — AI/diff emphasis */
+  --ai-bg: 38 86% 90%; /* amber-100 — AI tint */
   --diff-added-bg: 38 86% 90%;
   --diff-removed-bg: 5 59% 92%;
 
   /* Raw palette tokens (used by styleguide + components) */
-  --paper-50: #FBFAF7;
-  --paper-100: #F4F2EC;
-  --paper-200: #E9E6DD;
-  --paper-300: #D8D4C8;
-  --ink-900: #1A1B19;
-  --ink-700: #3C3E3A;
-  --ink-500: #6B6E67;
-  --ink-400: #8E9189;
-  --spruce-700: #1F4A3D;
-  --spruce-600: #256B53;
-  --spruce-500: #2E8268;
-  --spruce-100: #DCEBE4;
-  --amber-600: #B5740F;
-  --amber-500: #D98A1A;
-  --amber-100: #F8ECD4;
+  --paper-50: #fbfaf7;
+  --paper-100: #f4f2ec;
+  --paper-200: #e9e6dd;
+  --paper-300: #d8d4c8;
+  --ink-900: #1a1b19;
+  --ink-700: #3c3e3a;
+  --ink-500: #6b6e67;
+  --ink-400: #8e9189;
+  --spruce-700: #1f4a3d;
+  --spruce-600: #256b53;
+  --spruce-500: #2e8268;
+  --spruce-100: #dcebe4;
+  --amber-600: #b5740f;
+  --amber-500: #d98a1a;
+  --amber-100: #f8ecd4;
 }
 
 .dark {
   /* Background — warm charcoal #181814 */
   --background: 60 8% 9%;
-  --foreground: 45 24% 94%;        /* paper-100 on dark */
+  --foreground: 45 24% 94%; /* paper-100 on dark */
 
   /* Card — surface-1 #202019 */
   --card: 70 7% 12%;
@@ -126,7 +128,7 @@
   --muted-foreground: 80 5% 64%;
 
   /* Accent — amber tint on dark */
-  --accent: 40 47% 16%;            /* amber-dark-tint #3A2E14 */
+  --accent: 40 47% 16%; /* amber-dark-tint #3A2E14 */
   --accent-foreground: 38 70% 57%; /* amber-dark #E0A341 */
 
   /* Destructive */
@@ -141,8 +143,8 @@
   --ring: 159 39% 51%;
 
   /* AI tokens on dark */
-  --ai: 38 70% 57%;                /* amber-dark #E0A341 */
-  --ai-bg: 40 47% 16%;             /* amber-dark-tint */
+  --ai: 38 70% 57%; /* amber-dark #E0A341 */
+  --ai-bg: 40 47% 16%; /* amber-dark-tint */
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -199,9 +201,9 @@
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   /* Radius scale (restrained — premium ≠ super-round) */
-  --radius-sm: calc(var(--radius) - 4px);   /* 6px */
-  --radius-md: var(--radius);               /* 10px */
-  --radius-lg: calc(var(--radius) + 4px);   /* 14px */
+  --radius-sm: calc(var(--radius) - 4px); /* 6px */
+  --radius-md: var(--radius); /* 10px */
+  --radius-lg: calc(var(--radius) + 4px); /* 14px */
   --radius-full: 9999px;
 
   /* Shadow scale (soft, neutral, layered — paper not plastic) */
@@ -209,7 +211,7 @@
   --shadow-sm: 0 1px 3px rgba(26, 27, 25, 0.06), 0 1px 2px rgba(26, 27, 25, 0.04);
   --shadow-md: 0 4px 12px rgba(26, 27, 25, 0.08), 0 2px 4px rgba(26, 27, 25, 0.04);
   --shadow-lg: 0 12px 32px rgba(26, 27, 25, 0.12), 0 4px 8px rgba(26, 27, 25, 0.06);
-  --shadow-paper: 0 2px 8px rgba(26, 27, 25, 0.08), 0 16px 40px rgba(26, 27, 25, 0.10);
+  --shadow-paper: 0 2px 8px rgba(26, 27, 25, 0.08), 0 16px 40px rgba(26, 27, 25, 0.1);
 
   /* Motion */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -261,7 +263,7 @@ body {
   color: #1a1b19;
   /* Override any dark-mode text/bg inheritance */
   color-scheme: light;
-  font-family: 'Lato', 'Source Sans 3', sans-serif;
+  font-family: "Lato", "Source Sans 3", sans-serif;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -309,8 +311,12 @@ body {
    Skeleton shimmer (paper-tone, 180ms)
    ────────────────────────────────────────────────────────────── */
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .skeleton-shimmer {
