@@ -16,7 +16,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // Protected path prefixes (these are the URL paths, not the route-group dirs)
-const PROTECTED_PREFIXES = ["/dashboard", "/knowledge-base", "/documents", "/tailor", "/settings", "/onboarding"];
+const PROTECTED_PREFIXES = ["/dashboard", "/workspace", "/knowledge-base", "/documents", "/tailor", "/settings", "/onboarding"];
 // The sign-in page — authenticated users are bounced away
 const SIGN_IN_PATH = "/sign-in";
 

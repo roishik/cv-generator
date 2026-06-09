@@ -6,6 +6,7 @@ import type {
   LLMProvider,
   ExtractProfileInput,
   EditProfileInput,
+  TokenUsage,
   TailorInput,
   ValidateKeyResult,
 } from "./provider";
@@ -24,6 +25,7 @@ import {
 import { buildTailorPrompts } from "./prompts/tailor";
 import { EDIT_PROFILE_SYSTEM_PROMPT, buildEditProfileUserPrompt } from "./prompts/edit-profile";
 import { parseWithRepair } from "./structured";
+import { assertEstimatedPromptWithinCap } from "./token-budget";
 
 export interface AnthropicOptions {
   apiKey: string;
@@ -36,6 +38,7 @@ export class AnthropicProvider implements LLMProvider {
   private readonly client: Anthropic;
   private readonly model: string;
   private readonly maxTokens: number;
+  private lastUsage: TokenUsage | null = null;
 
   constructor(opts: AnthropicOptions) {
     this.client = new Anthropic({ apiKey: opts.apiKey });
@@ -77,6 +80,10 @@ export class AnthropicProvider implements LLMProvider {
         tool_choice: { type: "tool", name: tool.name },
         messages,
       });
+      this.addUsage(
+        res.usage?.input_tokens ?? 0,
+        res.usage?.output_tokens ?? 0,
+      );
       const toolUse = res.content.find(
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
       );
@@ -87,7 +94,12 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async extractProfile(input: ExtractProfileInput) {
+    this.lastUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     const user = buildExtractionUserPrompt(input.rawText);
+    assertEstimatedPromptWithinCap(
+      "extract",
+      `${EXTRACTION_SYSTEM_PROMPT}\n\n${user}`,
+    );
     const first = await this.callTool(
       EXTRACT_PROFILE_JSON_SCHEMA,
       EXTRACTION_SYSTEM_PROMPT,
@@ -103,7 +115,9 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async tailor(input: TailorInput) {
+    this.lastUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     const { system, user } = buildTailorPrompts(input);
+    assertEstimatedPromptWithinCap("tailor", `${system}\n\n${user}`);
     const first = await this.callTool(TAILOR_CV_JSON_SCHEMA, system, user);
     return parseWithRepair(this.id, "tailor", TailorResult, first, (msg) =>
       this.callTool(
@@ -115,7 +129,12 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async editProfile(input: EditProfileInput) {
+    this.lastUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     const user = buildEditProfileUserPrompt(input);
+    assertEstimatedPromptWithinCap(
+      "edit-profile",
+      `${EDIT_PROFILE_SYSTEM_PROMPT}\n\n${user}`,
+    );
     const first = await this.callTool(
       EXTRACT_PROFILE_JSON_SCHEMA,
       EDIT_PROFILE_SYSTEM_PROMPT,
@@ -128,6 +147,21 @@ export class AnthropicProvider implements LLMProvider {
         `${user}\n\n${buildRepairPrompt(msg)}`,
       ),
     );
+  }
+
+  getLastUsage(): TokenUsage | null {
+    return this.lastUsage;
+  }
+
+  getModelId(): string {
+    return this.model;
+  }
+
+  private addUsage(prompt: number, completion: number): void {
+    if (!this.lastUsage) return;
+    this.lastUsage.promptTokens += Math.max(0, prompt);
+    this.lastUsage.completionTokens += Math.max(0, completion);
+    this.lastUsage.totalTokens += Math.max(0, prompt) + Math.max(0, completion);
   }
 }
 

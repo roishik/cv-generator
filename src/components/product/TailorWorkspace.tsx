@@ -61,7 +61,6 @@ import {
   reRenderDocument,
   getDownloadUrl,
   recommendTemplateForJd,
-  verifyVersionTruthfulness,
   recomputeDiff,
   setProfilePhoto,
   getOriginalResume,
@@ -237,13 +236,11 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         setServerFits(res.fits);
         setNeedsReduction(res.needsReduction ?? null);
         setArtifactId(res.artifact?.id ?? null);
-        // Recompute diff + truthfulness against the edited content.
-        const [d, t] = await Promise.all([
-          recomputeDiff(docId, nextData).catch(() => null),
-          verifyVersionTruthfulness(docId, nextData).catch(() => null),
-        ]);
+        // Recompute the baseline↔edited diff deterministically. Per product
+        // decision, we do NOT rerun truthfulness verification for manual edits.
+        const d = await recomputeDiff(docId, nextData).catch(() => null);
         if (d) setDiff(d);
-        if (t) setTruthfulness(t);
+        setTruthfulness(null);
         if (res.fits) toast.success("Saved.", { duration: 2000 });
       } catch (e) {
         toast.error((e as Error).message ?? "Couldn't save that edit.");
@@ -341,6 +338,11 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
       toast.error("Fix the one-page overflow before exporting.");
       return;
     }
+    const blockingTruthErrors = (truthfulness?.flags ?? []).some((f) => f.severity === "error");
+    if (blockingTruthErrors) {
+      toast.error("Fix truthfulness errors before exporting this JD-generated version.");
+      return;
+    }
     setExporting(true);
     try {
       const { url } = await getDownloadUrl(artifactId);
@@ -354,7 +356,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
     } finally {
       setExporting(false);
     }
-  }, [artifactId, serverFits, initial.label]);
+  }, [artifactId, serverFits, initial.label, truthfulness]);
 
   // ── Auto-fit assist (re-render is the deterministic tighten ladder) ──
   const handleAutoFit = React.useCallback(async () => {

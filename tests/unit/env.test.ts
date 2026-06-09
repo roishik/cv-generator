@@ -8,29 +8,41 @@ import { z } from "zod";
 
 // Inline the schema shape for unit-testing without process.env mutation
 const envSchema = z.object({
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development"),
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   NEXTAUTH_URL: z.string().url().default("http://localhost:3000"),
   AUTH_SECRET: z.string().min(16),
+  NEXT_PUBLIC_GA_MEASUREMENT_ID: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   AUTH_DEV_LOGIN: z
     .string()
     .transform((v) => v === "true")
     .default("false"),
+  AUTH_ADMIN_EMAILS: z.string().optional(),
   DATABASE_URL: z.string().url(),
   APP_DATABASE_URL: z.string().url().optional(),
-  STORAGE_DRIVER: z.enum(["local", "supabase"]).default("local"),
+  CLOUD_SQL_CONNECTION_NAME: z.string().optional(),
+  STORAGE_DRIVER: z.enum(["local", "supabase", "gcs"]).default("local"),
   STORAGE_LOCAL_DIR: z.string().default("./storage"),
+  GCS_BUCKET_UPLOADS: z.string().optional(),
+  GCS_BUCKET_ARTIFACTS: z.string().optional(),
+  GCS_BUCKET_PHOTOS: z.string().optional(),
   STORAGE_SIGNING_SECRET: z.string().min(16),
   MASTER_KEY_SECRET: z.string().min(16),
-  AI_PROVIDER: z
-    .enum(["mock", "anthropic", "openai", "google"])
-    .default("mock"),
+  AI_PROVIDER: z.enum(["mock", "anthropic", "openai", "google", "deepseek"]).default("mock"),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  GOOGLE_API_KEY: z.string().optional(),
   PDF_MAX_CONCURRENCY: z.coerce.number().int().positive().default(3),
-  RATELIMIT_LLM_PER_HOUR: z.coerce.number().int().positive().default(10),
+  RATELIMIT_LLM_PER_HOUR: z.coerce.number().int().positive().default(30),
   RATELIMIT_UPLOAD_PER_HOUR: z.coerce.number().int().positive().default(20),
+  RATELIMIT_GLOBAL_LLM_PER_HOUR: z.coerce.number().int().positive().default(1000),
+  RATELIMIT_GLOBAL_UPLOAD_PER_HOUR: z.coerce.number().int().positive().default(1000),
+  TOKEN_CAP_EXTRACT_TOTAL: z.coerce.number().int().positive().default(120000),
+  TOKEN_CAP_TAILOR_TOTAL: z.coerce.number().int().positive().default(160000),
+  TOKEN_CAP_EDIT_PROFILE_TOTAL: z.coerce.number().int().positive().default(120000),
+  TOKEN_CAP_FREE_EXTRACT_DEFAULT: z.coerce.number().int().positive().default(120000),
+  TOKEN_CAP_FREE_TAILOR_DEFAULT: z.coerce.number().int().positive().default(160000),
 });
 
 const minimalValidEnv = {

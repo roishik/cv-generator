@@ -1,9 +1,12 @@
+import { notFound } from "next/navigation";
+
 export const runtime = "nodejs";
 
 // Dev-only visual inspection route: iframes BOTH templates (served by the
 // sibling /preview/[template] route handler) at true A4 (794×1123) so the
 // render engine can be eyeballed without the full app.
 export default function PreviewPage() {
+  if (process.env["NODE_ENV"] === "production") notFound();
   return (
     <main style={{ background: "#e9e9ec", padding: 24, fontFamily: "system-ui, sans-serif" }}>
       <h1 style={{ fontSize: 18, marginBottom: 16 }}>CV Render Engine — Preview (sample data)</h1>

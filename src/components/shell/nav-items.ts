@@ -9,6 +9,7 @@ export type NavItem = {
   href: string;
   /** Lucide icon name — resolved by the consuming component */
   icon: string;
+  adminOnly?: boolean;
 };
 
 export const NAV_ITEMS: NavItem[] = [
@@ -17,4 +18,5 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Documents", href: "/documents", icon: "FileText" },
   { label: "Profile", href: "/knowledge-base", icon: "User" },
   { label: "Settings", href: "/settings", icon: "Settings" },
+  { label: "Admin", href: "/admin", icon: "ShieldCheck", adminOnly: true },
 ];

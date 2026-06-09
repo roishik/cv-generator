@@ -28,11 +28,16 @@ import {
   kbSkills,
   cvDocuments,
 } from "@/lib/db/schema";
-import { getStorage } from "@/lib/storage/local-fs";
+import { getStorage } from "@/lib/storage/factory";
 import { extractTextFromBuffer, MIN_TEXT_LENGTH } from "@/lib/parse/extract-text";
 import { extractProfile } from "@/lib/ai/pipeline";
 import { createProvider } from "@/lib/ai/factory";
 import { resolveProvider } from "@/lib/providers/resolve-provider";
+import { assertWithinRateLimit } from "@/lib/ratelimit";
+import { assertUsageWithinCap } from "@/lib/ai/token-budget";
+import { providerModel, providerUsage, recordLlmUsageEvent } from "@/lib/usage/llm-usage";
+import { recordAnalyticsEventSafe } from "@/lib/analytics/events";
+import { byteSizeBucket } from "@/lib/analytics/meta";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Input validation
@@ -76,6 +81,7 @@ export interface ExtractionActionError {
 export async function extractProfileFromUpload(
   input: unknown,
 ): Promise<ExtractionActionResult | ExtractionActionError> {
+  const startedAt = Date.now();
   const parsed = ExtractFromUploadInput.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.message };
@@ -90,18 +96,29 @@ export async function extractProfileFromUpload(
   );
   const upload = uploadRows[0];
   if (!upload) {
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "extract_profile",
+      status: "error",
+      durationMs: Date.now() - startedAt,
+      meta: { source: "upload", reason: "upload_not_found" },
+    });
     return { error: "upload not found" };
   }
   if (upload.userId !== userId) {
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "extract_profile",
+      status: "error",
+      durationMs: Date.now() - startedAt,
+      meta: { source: "upload", reason: "upload_not_found" },
+    });
     return { error: "upload not found" };
   }
 
   // Mark as extracting.
   await withUser(userId, (tx) =>
-    tx
-      .update(resumeUploads)
-      .set({ status: "extracting" })
-      .where(eq(resumeUploads.id, uploadId)),
+    tx.update(resumeUploads).set({ status: "extracting" }).where(eq(resumeUploads.id, uploadId)),
   );
 
   try {
@@ -125,6 +142,21 @@ export async function extractProfileFromUpload(
         .where(eq(resumeUploads.id, uploadId)),
     );
 
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "extract_profile",
+      status: shortText ? "warning" : "ok",
+      durationMs: Date.now() - startedAt,
+      meta: {
+        source: "upload",
+        fromCache: result.fromCache,
+        shortText,
+        mimeType: upload.mimeType,
+        byteSize: upload.byteSize,
+        sizeBucket: byteSizeBucket(upload.byteSize),
+      },
+    });
+
     return { ...result, shortText };
   } catch (e) {
     // Mark as failed.
@@ -134,6 +166,20 @@ export async function extractProfileFromUpload(
         .set({ status: "failed", error: (e as Error).message })
         .where(eq(resumeUploads.id, uploadId)),
     );
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "extract_profile",
+      status: "error",
+      durationMs: Date.now() - startedAt,
+      meta: {
+        source: "upload",
+        reason: "extract_failed",
+        errorType: (e as Error).name,
+        mimeType: upload.mimeType,
+        byteSize: upload.byteSize,
+        sizeBucket: byteSizeBucket(upload.byteSize),
+      },
+    });
     return { error: (e as Error).message };
   }
 }
@@ -145,6 +191,7 @@ export async function extractProfileFromUpload(
 export async function extractProfileFromText(
   input: unknown,
 ): Promise<ExtractionActionResult | ExtractionActionError> {
+  const startedAt = Date.now();
   const parsed = ExtractFromTextInput.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.message };
@@ -155,8 +202,32 @@ export async function extractProfileFromText(
   const shortText = rawText.length < MIN_TEXT_LENGTH;
   try {
     const result = await runExtractionWithCache(userId, rawText, textHash, undefined);
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "extract_profile",
+      status: shortText ? "warning" : "ok",
+      durationMs: Date.now() - startedAt,
+      meta: {
+        source: "paste",
+        fromCache: result.fromCache,
+        shortText,
+        charBucket: rawText.length < 1_000 ? "<1K" : rawText.length < 5_000 ? "1K-5K" : "5K+",
+      },
+    });
     return { ...result, shortText };
   } catch (e) {
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "extract_profile",
+      status: "error",
+      durationMs: Date.now() - startedAt,
+      meta: {
+        source: "paste",
+        reason: "extract_failed",
+        errorType: (e as Error).name,
+        charBucket: rawText.length < 1_000 ? "<1K" : rawText.length < 5_000 ? "1K-5K" : "5K+",
+      },
+    });
     return { error: (e as Error).message };
   }
 }
@@ -195,12 +266,7 @@ async function runExtractionWithCache(
         const uploads = await tx
           .select({ sha256: resumeUploads.sha256 })
           .from(resumeUploads)
-          .where(
-            and(
-              eq(resumeUploads.id, kb.sourceUploadId),
-              eq(resumeUploads.sha256, textHash),
-            ),
-          );
+          .where(and(eq(resumeUploads.id, kb.sourceUploadId), eq(resumeUploads.sha256, textHash)));
         if (uploads.length > 0) return kb;
       }
     }
@@ -223,7 +289,8 @@ async function runExtractionWithCache(
     );
     return {
       knowledgeBaseId: existing.id,
-      baselineCvDocumentId: docs[0]?.id ?? (await seedBaselineCvDocument(userId, existing.id, existing.version)),
+      baselineCvDocumentId:
+        docs[0]?.id ?? (await seedBaselineCvDocument(userId, existing.id, existing.version)),
       fromCache: true,
     };
   }
@@ -231,14 +298,59 @@ async function runExtractionWithCache(
   // Cache miss — call the LLM provider. Resolve the user's BYOK key (mock needs
   // none) the same way the tailoring path does, so a configured real provider
   // actually uses the stored, decrypted key instead of throwing "requires a key".
-  const { provider: providerId, apiKey } = await resolveProvider(userId);
+  assertWithinRateLimit({ kind: "llm", userId });
+  const resolved = await resolveProvider(userId, {
+    purpose: "extract",
+    allowManaged: true,
+  });
   const provider = createProvider({
-    provider: providerId,
-    ...(apiKey ? { apiKey } : {}),
+    provider: resolved.provider,
+    ...(resolved.apiKey ? { apiKey: resolved.apiKey } : {}),
   });
-  const { knowledgeBase } = await extractProfile(provider, rawText, {
-    idFor: () => randomUUID(),
-  });
+  const startedAt = Date.now();
+  let knowledgeBase: import("@/lib/schemas/knowledge-base").KnowledgeBase;
+  try {
+    ({ knowledgeBase } = await extractProfile(provider, rawText, {
+      idFor: () => randomUUID(),
+    }));
+    const usage = providerUsage(provider);
+    assertUsageWithinCap(
+      "extract",
+      usage,
+      resolved.authMode === "managed-free" ? resolved.freeTokenCap : undefined,
+    );
+    await recordLlmUsageEvent({
+      userId,
+      kind: "extract",
+      provider: provider.id,
+      model: providerModel(provider),
+      status: "ok",
+      latencyMs: Date.now() - startedAt,
+      usage,
+      meta: {
+        billing: resolved.authMode,
+        cacheHit: false,
+        freeTokenCap: resolved.freeTokenCap ?? null,
+      },
+    });
+  } catch (e) {
+    await recordLlmUsageEvent({
+      userId,
+      kind: "extract",
+      provider: provider.id,
+      model: providerModel(provider),
+      status: "error",
+      latencyMs: Date.now() - startedAt,
+      usage: providerUsage(provider),
+      meta: {
+        billing: resolved.authMode,
+        cacheHit: false,
+        error: (e as Error).message,
+        freeTokenCap: resolved.freeTokenCap ?? null,
+      },
+    });
+    throw e;
+  }
 
   // Persist the KB + child records in a single RLS-scoped transaction.
   const { kbId, cvDocId } = await withUser(userId, async (tx) => {
@@ -247,9 +359,8 @@ async function runExtractionWithCache(
       .select({ version: knowledgeBases.version })
       .from(knowledgeBases)
       .where(eq(knowledgeBases.userId, userId));
-    const nextVersion = existingKbs.length > 0
-      ? Math.max(...existingKbs.map((k) => k.version)) + 1
-      : 1;
+    const nextVersion =
+      existingKbs.length > 0 ? Math.max(...existingKbs.map((k) => k.version)) + 1 : 1;
 
     const [kb] = await tx
       .insert(knowledgeBases)
@@ -366,8 +477,18 @@ async function seedBaselineCvDocument(
     tx.select().from(kbSkills).where(eq(kbSkills.knowledgeBaseId, kbId)),
   );
 
-  const header = kb.header as { name?: string; title?: string; website?: string; summaryLong?: string };
-  const contact = kb.contact as { email?: string; phone?: string; location?: string; linkedin?: string };
+  const header = kb.header as {
+    name?: string;
+    title?: string;
+    website?: string;
+    summaryLong?: string;
+  };
+  const contact = kb.contact as {
+    email?: string;
+    phone?: string;
+    location?: string;
+    linkedin?: string;
+  };
 
   const baselineCvData = {
     schemaVersion: 1 as const,

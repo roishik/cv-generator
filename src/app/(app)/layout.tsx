@@ -1,6 +1,9 @@
 import { requireSession } from "@/lib/auth/guards";
 import { NavRail } from "@/components/shell/nav-rail";
 import { AppTopBar } from "@/components/shell/app-top-bar";
+import { AppAnalytics } from "@/components/analytics/app-analytics";
+import { auth } from "@/lib/auth/config";
+import { isAdminEmail } from "@/lib/admin/admin-emails";
 
 /**
  * Authenticated app shell layout.
@@ -20,24 +23,19 @@ import { AppTopBar } from "@/components/shell/app-top-bar";
  *
  * CV preview pane (when rendered) always uses .cv-paper wrapper.
  */
-export default async function AppLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Guard: redirects to /sign-in if not authenticated
   await requireSession();
+  const session = await auth();
+  const showAdmin = isAdminEmail(session?.user?.email);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
+      <AppAnalytics />
       <AppTopBar />
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <NavRail />
-        <main
-          id="main-content"
-          className="flex-1 overflow-y-auto bg-background"
-          tabIndex={-1}
-        >
+        <NavRail showAdmin={showAdmin} />
+        <main id="main-content" className="bg-background flex-1 overflow-y-auto" tabIndex={-1}>
           {children}
         </main>
       </div>

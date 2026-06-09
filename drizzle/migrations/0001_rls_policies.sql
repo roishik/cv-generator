@@ -24,7 +24,14 @@ BEGIN
     CREATE ROLE app_user LOGIN PASSWORD 'app_pw' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
   ELSE
     -- Make sure an existing role can never bypass RLS.
-    ALTER ROLE app_user NOSUPERUSER NOBYPASSRLS;
+    -- Cloud SQL's `postgres` role is not a true superuser and cannot change
+    -- SUPERUSER/BYPASSRLS attributes. In Cloud SQL we create `app_user` via
+    -- `gcloud sql users create`, which is already non-superuser/non-bypassrls.
+    BEGIN
+      ALTER ROLE app_user NOSUPERUSER NOBYPASSRLS;
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE NOTICE 'Skipping app_user hardening ALTER ROLE; current role lacks Cloud SQL superuser attributes.';
+    END;
   END IF;
 END
 $$;

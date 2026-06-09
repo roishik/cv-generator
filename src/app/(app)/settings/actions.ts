@@ -17,6 +17,7 @@ import { providerKeys, profiles } from "@/lib/db/schema";
 import { encryptKey, keyLast4 } from "@/lib/crypto/envelope";
 import { validateProviderKey } from "@/lib/ai/factory";
 import type { ProviderId } from "@/lib/ai/provider";
+import { recordAnalyticsEventSafe } from "@/lib/analytics/events";
 
 const PROVIDER_IDS = ["anthropic", "openai", "google", "deepseek"] as const;
 const ProviderIdSchema = z.enum(PROVIDER_IDS);
@@ -51,6 +52,7 @@ export async function saveProviderKey(
   rawProvider: string,
   rawApiKey: string,
 ): Promise<SaveKeyResult> {
+  const startedAt = Date.now();
   const providerParsed = ProviderIdSchema.safeParse(rawProvider);
   if (!providerParsed.success) return { ok: false, error: "Invalid provider" };
   const provider = providerParsed.data as ProviderId;
@@ -63,6 +65,13 @@ export async function saveProviderKey(
   // Validate the key against the provider (cheap models-list/ping call).
   const validation = await validateProviderKey(provider, apiKey);
   if (!validation.ok) {
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "provider_key_saved",
+      status: "error",
+      durationMs: Date.now() - startedAt,
+      meta: { provider, reason: "validation_failed" },
+    });
     return { ok: false, error: validation.message ?? `${provider} rejected this key` };
   }
 
@@ -106,13 +115,22 @@ export async function saveProviderKey(
     }
   });
 
+  await recordAnalyticsEventSafe({
+    userId,
+    kind: "provider_key_saved",
+    durationMs: Date.now() - startedAt,
+    meta: { provider },
+  });
+
   return { ok: true, validationMessage: validation.message };
 }
 
 /**
  * Remove a provider key for the authenticated user.
  */
-export async function deleteProviderKey(rawProvider: string): Promise<{ ok: boolean; error?: string }> {
+export async function deleteProviderKey(
+  rawProvider: string,
+): Promise<{ ok: boolean; error?: string }> {
   const providerParsed = ProviderIdSchema.safeParse(rawProvider);
   if (!providerParsed.success) return { ok: false, error: "Invalid provider" };
   const provider = providerParsed.data as ProviderId;
@@ -124,6 +142,12 @@ export async function deleteProviderKey(rawProvider: string): Promise<{ ok: bool
       .delete(providerKeys)
       .where(and(eq(providerKeys.userId, userId), eq(providerKeys.provider, provider))),
   );
+
+  await recordAnalyticsEventSafe({
+    userId,
+    kind: "provider_key_deleted",
+    meta: { provider },
+  });
 
   return { ok: true };
 }
@@ -168,7 +192,9 @@ export async function listProviderKeys(): Promise<ProviderKeyInfo[]> {
 /**
  * Set the active provider for tailoring. Updates profiles.defaultProvider.
  */
-export async function setActiveProvider(rawProvider: string): Promise<{ ok: boolean; error?: string }> {
+export async function setActiveProvider(
+  rawProvider: string,
+): Promise<{ ok: boolean; error?: string }> {
   const providerParsed = ProviderIdSchema.safeParse(rawProvider);
   if (!providerParsed.success) return { ok: false, error: "Invalid provider" };
   const provider = providerParsed.data as ProviderId;
@@ -183,14 +209,35 @@ export async function setActiveProvider(rawProvider: string): Promise<{ ok: bool
       .where(and(eq(providerKeys.userId, userId), eq(providerKeys.provider, provider)))
       .limit(1),
   );
-  if (existing.length === 0) return { ok: false, error: "No key configured for this provider" };
+  if (existing.length === 0) {
+    await recordAnalyticsEventSafe({
+      userId,
+      kind: "provider_selected",
+      status: "error",
+      meta: { provider, reason: "missing_key" },
+    });
+    return { ok: false, error: "No key configured for this provider" };
+  }
 
   await withUser(userId, (tx) =>
     tx
-      .update(profiles)
-      .set({ defaultProvider: provider, updatedAt: new Date() })
-      .where(eq(profiles.userId, userId)),
+      .insert(profiles)
+      .values({
+        userId,
+        defaultProvider: provider,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: profiles.userId,
+        set: { defaultProvider: provider, updatedAt: new Date() },
+      }),
   );
+
+  await recordAnalyticsEventSafe({
+    userId,
+    kind: "provider_selected",
+    meta: { provider },
+  });
 
   return { ok: true };
 }

@@ -1,0 +1,12 @@
+.git
+.next
+node_modules
+coverage
+playwright-report
+test-results
+storage
+.env
+.env.*
+.DS_Store
+.obsidian
+.research

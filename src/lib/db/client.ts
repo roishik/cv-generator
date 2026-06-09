@@ -28,18 +28,46 @@ import { schema } from "./schema";
 
 type AppDb = ReturnType<typeof makeDb>;
 
-function makeDb(connectionString: string, max: number) {
-  const sql = postgres(connectionString, {
-    max,
-    // Disable prepared statements so SET LOCAL + queries share one txn cleanly
-    // and connection reuse never leaks a server-side prepared plan across roles.
-    prepare: false,
-    onnotice: () => {
-      /* swallow NOTICE noise (e.g. "policy already exists" during dev) */
-    },
-  });
+const COMMON_OPTIONS = {
+  // Disable prepared statements so SET LOCAL + queries share one txn cleanly
+  // and connection reuse never leaks a server-side prepared plan across roles.
+  prepare: false,
+  onnotice: () => {
+    /* swallow NOTICE noise (e.g. "policy already exists" during dev) */
+  },
+} as const;
+
+function makeDb(
+  connectionString: string,
+  max: number,
+  cloudSqlConnectionName?: string,
+) {
+  const sql = cloudSqlConnectionName
+    ? postgres({
+        ...connectionOptionsFromUrl(connectionString),
+        ...COMMON_OPTIONS,
+        host: `/cloudsql/${cloudSqlConnectionName}`,
+        max,
+      })
+    : postgres(connectionString, {
+        ...COMMON_OPTIONS,
+        max,
+      });
   const db = drizzle(sql, { schema });
   return { db, sql };
+}
+
+function connectionOptionsFromUrl(connectionString: string): {
+  database: string;
+  username: string;
+  password: string;
+} {
+  const url = new URL(connectionString);
+  return {
+    database: url.pathname.replace(/^\//, ""),
+    username: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+  };
 }
 
 let _app: AppDb | undefined;
@@ -50,7 +78,7 @@ export function getAppDb() {
   if (!_app) {
     const env = getEnv();
     const url = env.APP_DATABASE_URL ?? env.DATABASE_URL;
-    _app = makeDb(url, 10);
+    _app = makeDb(url, 10, env.CLOUD_SQL_CONNECTION_NAME);
   }
   return _app.db;
 }
@@ -68,7 +96,7 @@ export function getAppSql() {
 export function getOwnerDb() {
   if (!_owner) {
     const env = getEnv();
-    _owner = makeDb(env.DATABASE_URL, 5);
+    _owner = makeDb(env.DATABASE_URL, 5, env.CLOUD_SQL_CONNECTION_NAME);
   }
   return _owner.db;
 }

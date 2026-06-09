@@ -8,6 +8,7 @@ import type {
   LLMProvider,
   ExtractProfileInput,
   EditProfileInput,
+  TokenUsage,
   TailorInput,
   ValidateKeyResult,
 } from "./provider";
@@ -341,6 +342,7 @@ function mockEditProfile(input: EditProfileInput): ExtractionResult {
 
 export class MockProvider implements LLMProvider {
   readonly id = "mock" as const;
+  private lastUsage: TokenUsage | null = null;
 
   async validateKey(): Promise<ValidateKeyResult> {
     // No key required for the mock provider.
@@ -348,16 +350,42 @@ export class MockProvider implements LLMProvider {
   }
 
   async extractProfile(input: ExtractProfileInput): Promise<ExtractionResult> {
-    return mockExtract(input);
+    const out = mockExtract(input);
+    this.lastUsage = estimateUsage(input.rawText, JSON.stringify(out));
+    return out;
   }
 
   async tailor(input: TailorInput): Promise<TailorResult> {
-    return mockTailor(input);
+    const out = mockTailor(input);
+    const prompt = `${input.jdText}\n${JSON.stringify(input.knowledgeBase)}\n${input.instructions ?? ""}`;
+    this.lastUsage = estimateUsage(prompt, JSON.stringify(out));
+    return out;
   }
 
   async editProfile(input: EditProfileInput): Promise<ExtractionResult> {
-    return mockEditProfile(input);
+    const out = mockEditProfile(input);
+    const prompt = `${input.instruction}\n${JSON.stringify(input.currentKb)}`;
+    this.lastUsage = estimateUsage(prompt, JSON.stringify(out));
+    return out;
   }
+
+  getLastUsage(): TokenUsage | null {
+    return this.lastUsage;
+  }
+
+  getModelId(): string {
+    return "mock-deterministic";
+  }
+}
+
+function estimateUsage(promptText: string, outputText: string): TokenUsage {
+  const promptTokens = Math.ceil(promptText.length / 4);
+  const completionTokens = Math.ceil(outputText.length / 4);
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+  };
 }
 
 // Exported for unit tests / deterministic id generation reuse.

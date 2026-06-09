@@ -24,8 +24,16 @@ const MIGRATIONS_DIR = join(process.cwd(), "drizzle", "migrations");
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is required to run migrations");
+  const cloudSqlConnectionName = process.env.CLOUD_SQL_CONNECTION_NAME;
 
-  const sql = postgres(url, { max: 1, onnotice: () => {} });
+  const sql = cloudSqlConnectionName
+    ? postgres({
+        ...connectionOptionsFromUrl(url),
+        host: `/cloudsql/${cloudSqlConnectionName}`,
+        max: 1,
+        onnotice: () => {},
+      })
+    : postgres(url, { max: 1, onnotice: () => {} });
   const db = drizzle(sql);
 
   try {
@@ -79,6 +87,19 @@ async function main() {
   } finally {
     await sql.end({ timeout: 5 });
   }
+}
+
+function connectionOptionsFromUrl(connectionString: string): {
+  database: string;
+  username: string;
+  password: string;
+} {
+  const url = new URL(connectionString);
+  return {
+    database: url.pathname.replace(/^\//, ""),
+    username: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+  };
 }
 
 main().catch((err) => {
