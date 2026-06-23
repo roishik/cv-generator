@@ -7,7 +7,7 @@ import {
   type KnowledgeBaseForLLM,
 } from "@/lib/schemas/knowledge-base";
 import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
-import type { ExtractionResult } from "@/lib/schemas/llm-contracts";
+import type { ExtractionResult, TailorFit } from "@/lib/schemas/llm-contracts";
 import { normalizeTailorCvData, computeDiff, type CvDiffEntry } from "./contracts";
 import { verifyTruthfulness, type TruthfulnessReport } from "./truthfulness";
 import { lintStyle, type StyleReport } from "./style-lint";
@@ -100,6 +100,8 @@ export interface TailorCvOutput {
   truthfulness: TruthfulnessReport;
   /** Deterministic writing-style review (warnings only; never blocks). */
   style: StyleReport;
+  /** The model's holistic JD↔candidate fit judgment. Null on no-JD edit runs. */
+  fit: TailorFit | null;
 }
 
 /**
@@ -156,5 +158,6 @@ export async function tailorCv(
     diff,
     truthfulness,
     style,
+    fit: result.fit ?? null,
   };
 }

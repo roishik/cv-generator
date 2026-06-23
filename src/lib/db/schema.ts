@@ -298,6 +298,9 @@ export const cvDocuments = pgTable(
     warnings: jsonb("warnings").notNull().default(sql`'[]'::jsonb`),
     diff: jsonb("diff").notNull().default(sql`'{}'::jsonb`),
     truthfulness: jsonb("truthfulness").notNull().default(sql`'{}'::jsonb`),
+    /** The LLM's holistic JD↔candidate fit judgment (FitAssessment). Null for
+     *  instructions-only runs or legacy rows tailored before fit was persisted. */
+    fitAssessment: jsonb("fit_assessment"),
     appliedThemeOverrides: jsonb("applied_theme_overrides"),
     /** Deterministic tailoring cache key — sha256(kbVersion + jdHash + templateId). */
     tailorCacheKey: text("tailor_cache_key"),

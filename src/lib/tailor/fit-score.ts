@@ -1,24 +1,24 @@
-// Deterministic JD ↔ CV fit assessment (FINDINGS.md Tier 2, item 2.1).
+// JD ↔ CV fit assessment (FINDINGS.md Tier 2, item 2.1).
 //
 // Source: 04-job-evaluation.md (scored dimensions, weights, verdict thresholds,
 // "Key Strengths" + "Gaps to Address" output).
 //
-// The reference repo scores fit with an LLM across five holistic dimensions.
-// Tailor's philosophy is deterministic-first, so this computes a keyword-overlap
-// ESTIMATE in pure code at ZERO extra LLM cost — reinforcing the honesty wedge
-// ("we tell you the truth about your fit, then tailor honestly").
+// PRIMARY PATH (`assembleFit`): the LLM produces the fit judgment — two dimension
+// scores (Technical Skills, Experience) plus readable strength/gap PHRASES — as
+// part of the tailoring call. This restores the reference repo's holistic-LLM
+// design and fixes the old keyword-overlap output (single-token "strengths" like
+// "high"/"part" that carried no real signal). We still derive `overall` and the
+// verdict band in code so the weighting + thresholds stay consistent.
 //
-// HONEST SCOPE (per the finding's "adapted" recommendation): of the rubric's
-// five dimensions only two have a deterministic data source in Tailor today —
-// Technical Skills and Experience. Behavioral Fit, Career Alignment, and
-// Location need profile data the KB does not hold, so they are intentionally
-// dropped for v1 (NOT silently — see `method` + the docs). The two computed
-// dimensions are re-weighted from the rubric's 30:25 ratio. Verdict thresholds
-// are kept verbatim. Fit is measured against the KB (the candidate's true
-// superset of facts), not the trimmed CV, so it answers "can this person
-// truthfully claim a match?" regardless of how a given tailoring turned out.
+// FALLBACK PATH (`computeFitAssessment`): a pure deterministic keyword-overlap
+// ESTIMATE, kept for legacy rows persisted before the LLM produced fit, and as a
+// safety net if a provider omits the fit object. The two dimensions are
+// re-weighted from the rubric's 30:25 ratio; verdict thresholds are verbatim.
+// Fit is measured against the KB (the candidate's true superset of facts), not
+// the trimmed CV, so it answers "can this person truthfully claim a match?"
 // PURE: no DB, no auth, no network.
 import type { KnowledgeBaseForLLM } from "@/lib/schemas/knowledge-base";
+import type { TailorFit } from "@/lib/schemas/llm-contracts";
 import { tokenize, stem } from "./keywords";
 
 export type FitVerdict =
@@ -40,8 +40,8 @@ export interface FitAssessment {
   strengths: string[];
   /** JD terms absent from the KB — the honest "gaps to address". */
   gaps: string[];
-  /** Marks this as a deterministic estimate, not an LLM judgment. */
-  method: "keyword-overlap";
+  /** "llm" = the model's holistic judgment; "keyword-overlap" = deterministic fallback. */
+  method: "llm" | "keyword-overlap";
 }
 
 // Rubric weights (04-job-evaluation.md §Weighting): Technical Skills 30%,
@@ -58,6 +58,30 @@ export function fitVerdict(score: number): FitVerdict {
   if (score >= 45) return "Moderate fit";
   if (score >= 30) return "Weak fit";
   return "Poor fit";
+}
+
+const clamp100 = (n: number): number => Math.min(100, Math.max(0, Math.round(n)));
+
+/**
+ * Assemble a FitAssessment from the LLM's holistic fit judgment (the primary
+ * path — see prompts/tailor.ts "FIT ASSESSMENT"). The model supplies the two
+ * dimension scores plus readable strength/gap phrases; we derive `overall` and
+ * the verdict band in code so the weighting + thresholds stay consistent with
+ * the deterministic fallback. PURE.
+ */
+export function assembleFit(fit: TailorFit): FitAssessment {
+  const skillsMatch = clamp100(fit.skillsMatch);
+  const experienceMatch = clamp100(fit.experienceMatch);
+  const overall = Math.round(skillsMatch * W_SKILLS + experienceMatch * W_EXPERIENCE);
+  return {
+    skillsMatch,
+    experienceMatch,
+    overall,
+    verdict: fitVerdict(overall),
+    strengths: fit.strengths.map((s) => s.trim()).filter(Boolean).slice(0, 8),
+    gaps: fit.gaps.map((g) => g.trim()).filter(Boolean).slice(0, 8),
+    method: "llm",
+  };
 }
 
 /** Join KB text fields into one blob for tokenization. */

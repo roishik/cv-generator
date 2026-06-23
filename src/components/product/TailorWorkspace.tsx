@@ -26,6 +26,7 @@ import * as React from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ArrowDown,
   Wand2,
   Download,
   RotateCcw,
@@ -155,6 +156,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
   // Inline-edit popover state.
   const [editPath, setEditPath] = React.useState<string | null>(null);
   const [editValue, setEditValue] = React.useState("");
+  const [editBefore, setEditBefore] = React.useState<string | null>(null);
 
   // Header title rename state.
   const [label, setLabel] = React.useState<string | null>(initial.label);
@@ -357,8 +359,11 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
       if (!target) return;
       setEditPath(path);
       setEditValue(target.value);
+      // Look up the diff entry so we can show the "before" text in the dialog.
+      const diffEntry = diff?.entries.find((e) => e.path === path && e.before !== undefined);
+      setEditBefore(diffEntry?.before ?? null);
     },
-    [view, tailored, baseline],
+    [view, tailored, baseline, diff],
   );
 
   const commitEdit = React.useCallback(() => {
@@ -892,7 +897,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
       </div>
 
       {/* Inline-edit dialog */}
-      <Dialog open={editPath !== null} onOpenChange={(o) => !o && setEditPath(null)}>
+      <Dialog open={editPath !== null} onOpenChange={(o) => { if (!o) { setEditPath(null); setEditBefore(null); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
@@ -902,6 +907,29 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
           {editPath && readPath(displayData ?? ({} as CvData), editPath)?.isList && (
             <p className="-mt-2 text-[11px] text-muted-foreground">One item per line.</p>
           )}
+
+          {/* Before → After diff view: show when this field was changed by the AI */}
+          {editBefore !== null && editBefore !== editValue && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-destructive/70">
+                  Previous
+                </span>
+              </div>
+              <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-[13px] text-muted-foreground">
+                {editBefore}
+              </div>
+              <div className="flex justify-center py-0.5">
+                <ArrowDown className="h-3.5 w-3.5 text-muted-foreground/50" aria-hidden />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-foreground/60">
+                  Current (editable)
+                </span>
+              </div>
+            </div>
+          )}
+
           {editPath &&
           (readPath(displayData ?? ({} as CvData), editPath)?.multiline ||
             readPath(displayData ?? ({} as CvData), editPath)?.isList) ? (
