@@ -146,6 +146,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
   const [focusPath, setFocusPath] = React.useState<string | null>(null);
   const [contentHeight, setContentHeight] = React.useState<number | null>(null);
 
+  const [extraThinking, setExtraThinking] = React.useState(false);
   const [generating, setGenerating] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -227,6 +228,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         jobDescription: jd,
         templateId,
         ...(instructions.trim() ? { instructions: instructions.trim() } : {}),
+        ...(extraThinking ? { extraThinking: true } : {}),
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -258,7 +260,7 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
     } finally {
       setGenerating(false);
     }
-  }, [canGenerate, jd, templateId, instructions, initial.cvDocumentId]);
+  }, [canGenerate, jd, templateId, instructions, extraThinking, initial.cvDocumentId]);
 
   // ── Persist an inline edit → deterministic re-render (0 LLM) ──
   const persistEdit = React.useCallback(
@@ -536,9 +538,31 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         </div>
       </fieldset>
 
+      {/* Extra thinking toggle */}
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border p-2.5 transition-colors hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+        <input
+          type="checkbox"
+          checked={extraThinking}
+          onChange={(e) => setExtraThinking(e.target.checked)}
+          disabled={generating}
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-primary"
+        />
+        <div className="min-w-0">
+          <span className="block text-[12px] font-semibold text-foreground">
+            Extra thinking
+          </span>
+          <span className="mt-0.5 block text-[10px] text-muted-foreground">
+            Deeper reasoning + critic pass · uses more tokens · BYOK only
+          </span>
+        </div>
+      </label>
+
       {/* Generate / progress */}
       {generating ? (
-        <GenerationProgress provider={initial.providerLabel} running={generating} />
+        <GenerationProgress
+          provider={extraThinking ? `${initial.providerLabel} · extra thinking` : initial.providerLabel}
+          running={generating}
+        />
       ) : (
         <Button
           onClick={handleGenerate}

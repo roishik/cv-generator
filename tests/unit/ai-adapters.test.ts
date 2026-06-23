@@ -1,5 +1,23 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock @/env before any adapter is imported so getEnv() doesn't require a
+// populated .env file in the test environment. All adapter unit tests are
+// pure mocks — they don't exercise env-gated behaviour.
+vi.mock("@/env", () => {
+  const minimal = {
+    TOKEN_CAP_EXTRACT_TOTAL: 120000,
+    TOKEN_CAP_TAILOR_TOTAL: 160000,
+    TOKEN_CAP_EDIT_PROFILE_TOTAL: 120000,
+    ANTHROPIC_EXTENDED_MODEL: undefined as string | undefined,
+    GOOGLE_EXTENDED_MODEL: undefined as string | undefined,
+  };
+  return {
+    env: new Proxy(minimal, { get: (t, k) => t[k as keyof typeof t] }),
+    getEnv: () => minimal,
+  };
+});
+
 import { AnthropicProvider } from "@/lib/ai/anthropic";
 import { OpenAIProvider } from "@/lib/ai/openai";
 import { GoogleProvider } from "@/lib/ai/google";
@@ -10,7 +28,7 @@ import { SchemaValidationError } from "@/lib/ai/provider";
 import { MockProvider } from "@/lib/ai/mock";
 import { SAMPLE_KB, SAMPLE_JD, SAMPLE_RESUME_TEXT } from "./fixtures/ai-fixtures";
 
-// A valid extraction payload (the JSON a real model would emit for the tool args).
+// A valid extraction payload (the JSON a real model would emit).
 const VALID_EXTRACTION = {
   header: { name: "Dana Whitfield", title: "Senior PM" },
   contact: { email: "dana@example.com" },
@@ -47,26 +65,42 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Build a fake Anthropic stream object that resolves with a single text block. */
+function makeAnthropicStream(payload: object) {
+  return {
+    finalMessage: vi.fn().mockResolvedValue({
+      usage: { input_tokens: 10, output_tokens: 10 },
+      content: [{ type: "text", text: JSON.stringify(payload) }],
+    }),
+  };
+}
+
 describe("AnthropicProvider adapter", () => {
-  function stub(provider: AnthropicProvider, payload: object) {
-    // The adapter accesses this.client.messages.create
-    const client = (provider as unknown as { client: { messages: { create: unknown } } })
-      .client;
-    client.messages.create = vi.fn().mockResolvedValue({
-      content: [{ type: "tool_use", name: "x", input: payload }],
-    });
+  /**
+   * Stub the streaming call. The adapter now uses client.messages.stream()
+   * (incompatible with tool_choice forcing, which can't coexist with thinking).
+   */
+  function stubStream(provider: AnthropicProvider, payload: object) {
+    const client = (
+      provider as unknown as { client: { messages: { stream: unknown } } }
+    ).client;
+    client.messages.stream = vi.fn().mockReturnValue(makeAnthropicStream(payload));
   }
 
-  it("parses extraction tool-use into a valid ExtractionResult", async () => {
+  it("parses structured JSON into a valid ExtractionResult", async () => {
     const p = new AnthropicProvider({ apiKey: "sk-test" });
-    stub(p, VALID_EXTRACTION);
+    stubStream(p, VALID_EXTRACTION);
     const res = await p.extractProfile({ rawText: SAMPLE_RESUME_TEXT });
     expect(() => ExtractionResult.parse(res)).not.toThrow();
   });
 
-  it("parses tailor tool-use into a valid TailorResult", async () => {
+  it("parses structured JSON into a valid TailorResult", async () => {
     const p = new AnthropicProvider({ apiKey: "sk-test" });
-    stub(p, VALID_TAILOR);
+    stubStream(p, VALID_TAILOR);
     const res = await p.tailor({
       knowledgeBase: SAMPLE_KB,
       jdText: SAMPLE_JD,
@@ -77,23 +111,27 @@ describe("AnthropicProvider adapter", () => {
 
   it("repairs once on a bad first response, then succeeds", async () => {
     const p = new AnthropicProvider({ apiKey: "sk-test" });
-    const client = (p as unknown as { client: { messages: { create: unknown } } }).client;
-    const create = vi
+    const client = (
+      p as unknown as { client: { messages: { stream: unknown } } }
+    ).client;
+    const streamFn = vi
       .fn()
-      .mockResolvedValueOnce({ content: [{ type: "tool_use", name: "x", input: { bad: true } }] })
-      .mockResolvedValueOnce({ content: [{ type: "tool_use", name: "x", input: VALID_EXTRACTION }] });
-    client.messages.create = create;
+      .mockReturnValueOnce(makeAnthropicStream({ bad: true }))
+      .mockReturnValueOnce(makeAnthropicStream(VALID_EXTRACTION));
+    client.messages.stream = streamFn;
     const res = await p.extractProfile({ rawText: "x" });
-    expect(create).toHaveBeenCalledTimes(2);
+    expect(streamFn).toHaveBeenCalledTimes(2);
     expect(res.header.name).toBe("Dana Whitfield");
   });
 
   it("hard-errors after the repair retry also fails", async () => {
     const p = new AnthropicProvider({ apiKey: "sk-test" });
-    const client = (p as unknown as { client: { messages: { create: unknown } } }).client;
-    client.messages.create = vi
+    const client = (
+      p as unknown as { client: { messages: { stream: unknown } } }
+    ).client;
+    client.messages.stream = vi
       .fn()
-      .mockResolvedValue({ content: [{ type: "tool_use", name: "x", input: { bad: true } }] });
+      .mockReturnValue(makeAnthropicStream({ bad: true }));
     await expect(p.extractProfile({ rawText: "x" })).rejects.toBeInstanceOf(
       SchemaValidationError,
     );

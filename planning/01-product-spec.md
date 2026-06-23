@@ -153,6 +153,19 @@ Each fact carries a `confidence` (extracted vs user-confirmed) and a `source` (r
 | L5 | Interview-prep notes derived from the KB + JD |
 | L6 | Team/career-coach shared workspaces |
 | L7 | Outcome tracking (callback/interview rates) feeding angle recommendations |
+| L8 | **Creativity scale** — user-set control over how inventive tailoring may be when rewriting experience bullets (see below) |
+
+**L8 — Creativity scale (detail).** A user-facing scale (e.g. a 0–100 slider or 3–5 named steps such as *Strict → Balanced → Bold*) set per generation, controlling how much latitude the tailoring LLM has when rewriting experience bullets:
+
+- **Low creativity** — stay strictly within what the knowledge base states. Only rephrase, reorder, and re-emphasize facts that already exist; never add a skill, tool, or responsibility not present in the KB. This is today's MVP behavior.
+- **High creativity** — allow the agent to surface *reasonable, role-implied* experience that isn't explicitly in the KB. Example: a software engineer almost certainly has some cloud exposure, so "cloud experience" may be inferred even if no bullet states it. The scale governs how far the model may extrapolate from what a person in that role plausibly did.
+
+Open design points to resolve before building this:
+
+- **Tension with the non-negotiable truthfulness guardrail (§4).** "Never fabricate" is currently an absolute. Any non-zero creativity is, by definition, asserting things the user did not state. This feature *cannot* ship without an explicit founder decision on whether the guardrail becomes a tunable spectrum rather than a hard wall — and how that is framed legally and in the UI.
+- **Honesty report integration.** At minimum, every inferred (non-KB-grounded) claim must be flagged in the honesty report, visually distinct in the diff, and individually confirmable/revertable by the user — so "creative" additions are always opt-in, never silent.
+- **Feedback loop into the KB.** If the user confirms an inferred claim ("yes, I did use AWS"), offer to write it back into the KB as a real fact, so the inference becomes grounded for future generations.
+- **Scope of the scale.** Decide whether creativity affects only phrasing/emphasis (safe) or also factual content (risky), or whether those should be two separate controls.
 
 ---
 

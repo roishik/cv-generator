@@ -42,3 +42,6 @@ test-results/
 .a5c/node_modules/
 .a5c/package-lock.json
 .cc10x/
+
+# Research / investigation scratch (gitignored, but visible in Obsidian — no leading dot)
+research/

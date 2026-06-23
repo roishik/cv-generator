@@ -26,13 +26,15 @@ import type { RlsDb } from "@/lib/db/rls";
 import { withUser } from "@/lib/db/rls";
 import { artifacts, cvDocuments, jobDescriptions } from "@/lib/db/schema";
 import { createProvider } from "@/lib/ai/factory";
-import type { ProviderId, TokenUsage } from "@/lib/ai/provider";
+import type { ProviderId, TokenUsage, ReasoningTier } from "@/lib/ai/provider";
 import { tailorCv, type TailorCvOutput } from "@/lib/ai/pipeline";
+import { stemSet } from "./keywords";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
 import { lintStyle, type StyleReport } from "@/lib/ai/style-lint";
 import { suggestCuts, type CutSuggestion } from "./suggest-cuts";
 import { computeFitAssessment, type FitAssessment } from "./fit-score";
 import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
+import type { KnowledgeBaseForLLM } from "@/lib/schemas/knowledge-base";
 import type { TailorRationaleItem } from "@/lib/schemas/llm-contracts";
 import { assertUsageWithinCap } from "@/lib/ai/token-budget";
 import { renderCvToPdf } from "@/lib/pdf/render-pdf";
@@ -76,6 +78,9 @@ export interface TailorToJobInput {
   instructions?: string;
   /** Test hook: a deterministic provider instead of the factory-built one. */
   providerOverride?: import("@/lib/ai/provider").LLMProvider;
+  /** Opt-in reasoning depth. `extended` uses a flagship model + critic/revise pass
+   *  and requires `billingMode === "byok"`. */
+  reasoningTier?: ReasoningTier;
 }
 
 export interface TailorToJobSuccess {
@@ -184,6 +189,7 @@ async function runInTx(
     jobDescription: jd,
     templateId,
     ...(input.instructions ? { instructions: input.instructions } : {}),
+    ...(input.reasoningTier ? { reasoningTier: input.reasoningTier } : {}),
   });
   const [cached] = await tx
     .select()
@@ -242,8 +248,16 @@ async function runInTx(
     };
   }
 
-  // 5) LLM tailoring call (with one bounded truthfulness-repair retry for JD runs).
+  // 5) LLM tailoring call (with bounded retry/revise passes).
   const hasRealJd = jd.length >= 30;
+
+  // Extended tier requires BYOK to prevent exhausting the managed-free cap.
+  if (input.reasoningTier === "extended" && input.billingMode !== "byok") {
+    throw new Error(
+      "Extra thinking requires a BYOK API key. Add your own key in Settings to use this feature.",
+    );
+  }
+
   assertWithinRateLimit({ kind: "llm", userId });
   const provider =
     input.providerOverride ??
@@ -251,6 +265,7 @@ async function runInTx(
       provider: input.provider ?? "mock",
       ...(input.apiKey ? { apiKey: input.apiKey } : {}),
       ...(input.model ? { model: input.model } : {}),
+      ...(input.reasoningTier ? { reasoning: { tier: input.reasoningTier } } : {}),
     });
 
   const startedAt = Date.now();
@@ -280,6 +295,24 @@ async function runInTx(
     });
     collectUsage();
 
+    // Extended tier: always run a deterministic critic pass and revise.
+    // Standard tier: only retry on truthfulness failure.
+    if (input.reasoningTier === "extended" && hasRealJd) {
+      const critique = buildCritique(tailored, knowledgeBase, jd, input.instructions);
+      if (critique) {
+        attempts += 1;
+        tailored = await tailorCv(provider, {
+          knowledgeBase,
+          jobDescription: jd,
+          templateId,
+          baselineCvData: baseline,
+          instructions: critique,
+        });
+        collectUsage();
+      }
+    }
+
+    // Truthfulness repair (both tiers) — if still failing after draft / revise pass.
     if (hasRealJd && !tailored.truthfulness.ok) {
       attempts += 1;
       tailored = await tailorCv(provider, {
@@ -322,6 +355,8 @@ async function runInTx(
       meta: {
         billing: input.billingMode ?? "unknown",
         attempts,
+        reasoningTier: input.reasoningTier ?? "standard",
+        model: providerModel(provider),
         hadTruthfulnessRetry: attempts > 1,
         freeTokenCap: input.freeTokenCap ?? null,
       },
@@ -499,6 +534,79 @@ async function nextTailoredVersion(tx: RlsDb, userId: string): Promise<number> {
     .where(and(eq(cvDocuments.userId, userId), eq(cvDocuments.kind, "tailored")));
   const max = rows.reduce((m, r) => Math.max(m, r.version), 0);
   return max + 1;
+}
+
+/**
+ * Build a structured self-critique instruction for the extended-tier revise pass.
+ * Reuses the already-computed deterministic detectors (truthfulness, style) plus
+ * a keyword gap analysis to identify JD-relevant KB signals not yet surfaced.
+ * Returns null when there is nothing to critique (draft is already clean).
+ */
+function buildCritique(
+  draft: TailorCvOutput,
+  kb: KnowledgeBaseForLLM,
+  jd: string,
+  originalInstructions?: string,
+): string | null {
+  const parts: string[] = [];
+
+  // 1. Truthfulness errors from the already-computed report (never invent fixes).
+  const truthErrors = draft.truthfulness.flags
+    .filter((f) => f.severity === "error")
+    .slice(0, 8);
+  if (truthErrors.length > 0) {
+    parts.push("TRUTHFULNESS ERRORS (fix without inventing — KB facts only):");
+    for (const f of truthErrors) parts.push(`  - ${f.path}: ${f.message}`);
+  }
+
+  // 2. Style warnings from the already-computed report.
+  const styleWarnings = draft.style.flags.slice(0, 8);
+  if (styleWarnings.length > 0) {
+    parts.push("STYLE ISSUES (address these for a stronger CV):");
+    for (const f of styleWarnings) parts.push(`  - ${f.path}: ${f.message}`);
+  }
+
+  // 3. JD-relevant KB signals present in the KB but not yet surfaced in the draft.
+  if (jd.length >= 30) {
+    const jdStems = stemSet(jd);
+    const kbBlob = [
+      ...kb.skills.professional,
+      ...kb.skills.soft,
+      ...kb.experiences.flatMap((e) => [
+        ...e.tags,
+        ...e.bulletsFull,
+        ...e.angles.flatMap((a) => [a.label, ...a.jdSignals]),
+      ]),
+    ].join(" ");
+    const kbStems = stemSet(kbBlob);
+    const draftBlob = [
+      draft.cvData.summary,
+      ...draft.cvData.experience.flatMap((e) => e.bullets),
+    ].join(" ");
+    const draftStems = stemSet(draftBlob);
+
+    const missing: string[] = [];
+    for (const s of jdStems) {
+      if (kbStems.has(s) && !draftStems.has(s)) missing.push(s);
+    }
+    if (missing.length > 0) {
+      parts.push("JD-RELEVANT KB SIGNALS NOT YET SURFACED IN DRAFT (surface where truthful):");
+      parts.push("  " + missing.slice(0, 12).join(", "));
+    }
+  }
+
+  if (parts.length === 0) return null;
+
+  const header = [
+    "SELF-CRITIQUE REVISE PASS — address ALL of the following in the revised output.",
+    "Only use facts the KB supports. Never invent employers, metrics, dates, or skills.",
+    ...(originalInstructions?.trim()
+      ? [`Original user request (still applies): ${originalInstructions.trim()}`]
+      : []),
+    "",
+  ];
+
+  return [...header, ...parts].join("\n");
 }
 
 function buildTruthfulnessRepairInstruction(

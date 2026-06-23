@@ -48,6 +48,8 @@ const RunTailoringInput = z
     company: z.string().max(200).optional(),
     title: z.string().max(200).optional(),
     instructions: z.string().max(4000).optional(),
+    /** Enable extended thinking: flagship model + critic/revise pass. BYOK only. */
+    extraThinking: z.boolean().optional(),
   })
   .refine(
     (v) => (v.jobDescription?.trim().length ?? 0) >= 30 || !!v.instructions?.trim(),
@@ -94,6 +96,7 @@ export async function runTailoring(
       ...(apiKey ? { apiKey } : {}),
       billingMode: authMode,
       ...(freeTokenCap ? { freeTokenCap } : {}),
+      ...(input.extraThinking ? { reasoningTier: "extended" as const } : {}),
     });
   } catch (e) {
     return { ok: false, error: userFacingTailorError(e) };

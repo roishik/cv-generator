@@ -64,6 +64,9 @@ const envSchema = z
     GOOGLE_DEFAULT_MODEL: z.string().optional(),
     DEEPSEEK_API_KEY: z.string().optional(),
     DEEPSEEK_DEFAULT_MODEL: z.string().optional(),
+    // Extended-tier model overrides (defaults are FLAGSHIP_MODELS in provider.ts).
+    ANTHROPIC_EXTENDED_MODEL: z.string().optional(),
+    GOOGLE_EXTENDED_MODEL: z.string().optional(),
 
     // ── PDF ───────────────────────────────────────────────────────────────────
     PLAYWRIGHT_CHROMIUM: z.string().optional(),

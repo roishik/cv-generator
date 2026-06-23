@@ -202,8 +202,11 @@ deterministic, budgeted-call model). See `research/FINDINGS.md` §5–§6.
 2. ESLint dep-direction rule must stay active (enforces architectural boundaries).
 3. Every boundary (action args, handler bodies, LLM output) validated with Zod.
 4. The render engine (`lib/render-engine/**`) is pure — no DB, no fetch, no side-effects.
-5. LLM is used for exactly 3 call types: (1) resume extraction, (2) JD tailoring,
-   (3) natural-language profile editing ("Edit with AI"). Everything else —
-   parsing, structuring, render, one-page-fit, PDF, QA, diff — is deterministic code.
+5. **Budgeted reasoning** — LLM is used for 3 call types: (1) resume extraction,
+   (2) JD tailoring, (3) natural-language profile editing ("Edit with AI").
+   Standard tier: ≤2 LLM calls per tailoring (draft + conditional truthfulness repair).
+   Opt-in extended tier (BYOK only): ≤3 calls (draft + deterministic critic/revise + optional
+   repair). Everything else — parsing, structuring, render, one-page-fit, PDF, QA, diff — is
+   deterministic code with zero tokens. The truthfulness and one-page guarantees are unchanged.
 6. Dev-login shim is HARD-DISABLED in production (`NODE_ENV !== 'production'`).
 7. API keys are never logged; only `last4` chars shown in UI.

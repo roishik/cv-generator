@@ -9,8 +9,14 @@ import type {
   TokenUsage,
   TailorInput,
   ValidateKeyResult,
+  ReasoningOptions,
 } from "./provider";
-import { DEFAULT_MODELS } from "./provider";
+import {
+  DEFAULT_MODELS,
+  FLAGSHIP_MODELS,
+  GOOGLE_THINKING_BUDGET,
+} from "./provider";
+import { env } from "@/env";
 import {
   ExtractionResult,
   TailorResult,
@@ -30,18 +36,26 @@ import { assertEstimatedPromptWithinCap } from "./token-budget";
 export interface GoogleOptions {
   apiKey: string;
   model?: string;
+  reasoning?: ReasoningOptions;
 }
 
 export class GoogleProvider implements LLMProvider {
   readonly id = "google" as const;
   private readonly client: GoogleGenAI;
   private readonly model: string;
+  private readonly thinkingBudget: number;
   private lastModelUsed: string;
   private lastUsage: TokenUsage | null = null;
 
   constructor(opts: GoogleOptions) {
     this.client = new GoogleGenAI({ apiKey: opts.apiKey });
-    this.model = opts.model ?? DEFAULT_MODELS.google;
+    const tier = opts.reasoning?.tier ?? "standard";
+    const defaultModel =
+      tier === "extended"
+        ? (env.GOOGLE_EXTENDED_MODEL ?? FLAGSHIP_MODELS.google)
+        : DEFAULT_MODELS.google;
+    this.model = opts.model ?? defaultModel;
+    this.thinkingBudget = GOOGLE_THINKING_BUDGET[tier];
     this.lastModelUsed = this.model;
   }
 
@@ -144,6 +158,7 @@ export class GoogleProvider implements LLMProvider {
       this.lastModelUsed = this.model;
       return await this.generate(schema, system, userPrompt, this.model);
     } catch (err) {
+      // Transient-overload fallback only applies to the default flash model.
       if (this.model === "gemini-3.5-flash" && isTransientGoogleOverload(err)) {
         const fallback = "gemini-2.5-flash";
         this.lastModelUsed = fallback;
@@ -167,6 +182,8 @@ export class GoogleProvider implements LLMProvider {
         responseMimeType: "application/json",
         // Our JSON Schema is structurally compatible with Gemini's responseSchema.
         responseSchema: schema.schema as never,
+        // Adaptive thinking: budget scales with the reasoning tier.
+        thinkingConfig: { thinkingBudget: this.thinkingBudget } as never,
       },
     });
   }
