@@ -29,6 +29,7 @@ test-results/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.obsidian/
 
 # Misc
 *.pem
