@@ -9,8 +9,9 @@ import type {
   TokenUsage,
   TailorInput,
   ValidateKeyResult,
+  ReasoningOptions,
 } from "./provider";
-import { DEFAULT_MODELS } from "./provider";
+import { DEFAULT_MODELS, FLAGSHIP_MODELS } from "./provider";
 import {
   ExtractionResult,
   TailorResult,
@@ -31,6 +32,7 @@ import { assertEstimatedPromptWithinCap } from "./token-budget";
 export interface OpenAIOptions {
   apiKey: string;
   model?: string;
+  reasoning?: ReasoningOptions;
 }
 
 export class OpenAIProvider implements LLMProvider {
@@ -41,7 +43,8 @@ export class OpenAIProvider implements LLMProvider {
 
   constructor(opts: OpenAIOptions) {
     this.client = new OpenAI({ apiKey: opts.apiKey });
-    this.model = opts.model ?? DEFAULT_MODELS.openai;
+    const isExtended = opts.reasoning?.tier === "extended";
+    this.model = opts.model ?? (isExtended ? FLAGSHIP_MODELS.openai : DEFAULT_MODELS.openai);
   }
 
   async validateKey(): Promise<ValidateKeyResult> {

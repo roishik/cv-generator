@@ -83,6 +83,42 @@ export const DEFAULT_MODELS = {
   deepseek: "deepseek-v4-pro",
 } as const;
 
+// ── Reasoning tier ──────────────────────────────────────────────────────────
+
+/** `standard` = default path (adaptive thinking, modest effort, current model).
+ *  `extended` = opt-in toggle (higher effort, flagship model, critic/revise loop). */
+export type ReasoningTier = "standard" | "extended";
+
+export interface ReasoningOptions {
+  tier: ReasoningTier;
+}
+
+/** Flagship models used by the extended tier (env vars override these defaults). */
+export const FLAGSHIP_MODELS = {
+  anthropic: "claude-opus-4-8",
+  openai: "gpt-5.5-2026-04-23",
+  google: "gemini-2.5-pro",
+} as const;
+
+/** Anthropic `output_config.effort` per tier. */
+export const ANTHROPIC_EFFORT: Record<ReasoningTier, "medium" | "high"> = {
+  standard: "medium",
+  extended: "high",
+};
+
+/** Anthropic `max_tokens` per tier. Standard 16 k covers most tailorings with
+ *  thinking; extended doubles that for the longer critic/revise chain. */
+export const ANTHROPIC_MAX_TOKENS: Record<ReasoningTier, number> = {
+  standard: 16000,
+  extended: 32000,
+};
+
+/** Gemini `thinkingBudget` tokens per tier. */
+export const GOOGLE_THINKING_BUDGET: Record<ReasoningTier, number> = {
+  standard: 8000,
+  extended: 24000,
+};
+
 export class SchemaValidationError extends Error {
   constructor(
     public readonly provider: ProviderId,

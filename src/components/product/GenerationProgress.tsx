@@ -47,7 +47,7 @@ export function GenerationProgress({ provider, running }: GenerationProgressProp
     const reset = window.setTimeout(() => setTick(0), 0);
     const id = window.setInterval(() => {
       setTick((a) => Math.min(a + 1, STEPS.length - 1));
-    }, 520);
+    }, 7000);
     return () => {
       window.clearTimeout(reset);
       window.clearInterval(id);

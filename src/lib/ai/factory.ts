@@ -4,7 +4,7 @@
 // (`resolveProvider(userId, provider)` that loads + decrypts a stored key) is
 // layered in a server action later. This file stays pure: given a provider id
 // and (for real providers) an already-decrypted key, it constructs an adapter.
-import type { LLMProvider, ProviderId } from "./provider";
+import type { LLMProvider, ProviderId, ReasoningOptions } from "./provider";
 import { MockProvider } from "./mock";
 import { AnthropicProvider } from "./anthropic";
 import { OpenAIProvider } from "./openai";
@@ -17,6 +17,8 @@ export interface CreateProviderInput {
   apiKey?: string;
   /** Optional model id override (else the per-provider default). */
   model?: string;
+  /** Reasoning tier — maps to thinking depth / effort / flagship model. */
+  reasoning?: ReasoningOptions;
 }
 
 /**
@@ -32,16 +34,19 @@ export function createProvider(input: CreateProviderInput): LLMProvider {
       return new AnthropicProvider({
         apiKey: requireKey(input),
         ...(input.model ? { model: input.model } : {}),
+        ...(input.reasoning ? { reasoning: input.reasoning } : {}),
       });
     case "openai":
       return new OpenAIProvider({
         apiKey: requireKey(input),
         ...(input.model ? { model: input.model } : {}),
+        ...(input.reasoning ? { reasoning: input.reasoning } : {}),
       });
     case "google":
       return new GoogleProvider({
         apiKey: requireKey(input),
         ...(input.model ? { model: input.model } : {}),
+        ...(input.reasoning ? { reasoning: input.reasoning } : {}),
       });
     case "deepseek":
       return new DeepSeekProvider({
