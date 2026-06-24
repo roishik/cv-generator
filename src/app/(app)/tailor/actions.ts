@@ -159,23 +159,26 @@ export async function getTailoredVersion(
       .where(eq(artifacts.cvDocumentId, doc.id))
       .limit(1);
 
-    // Recompute the deterministic fit estimate (finding 2.1) from the KB + the
-    // stored JD so it shows on reload too. Best-effort: null if either is absent.
-    let fitAssessment: FitAssessment | null = null;
-    try {
-      let jdText = "";
-      if (doc.jobDescriptionId) {
-        const [jd] = await tx
-          .select({ rawText: jobDescriptions.rawText })
-          .from(jobDescriptions)
-          .where(eq(jobDescriptions.id, doc.jobDescriptionId))
-          .limit(1);
-        jdText = jd?.rawText ?? "";
+    // The fit assessment is the LLM's judgment, persisted on the row. For legacy
+    // rows tailored before fit was persisted, fall back to the deterministic
+    // keyword-overlap estimate (recomputed from the KB + the stored JD).
+    let fitAssessment = (doc.fitAssessment as FitAssessment | null) ?? null;
+    if (!fitAssessment) {
+      try {
+        let jdText = "";
+        if (doc.jobDescriptionId) {
+          const [jd] = await tx
+            .select({ rawText: jobDescriptions.rawText })
+            .from(jobDescriptions)
+            .where(eq(jobDescriptions.id, doc.jobDescriptionId))
+            .limit(1);
+          jdText = jd?.rawText ?? "";
+        }
+        const kb = await loadKnowledgeBase(tx, userId);
+        fitAssessment = computeFitAssessment(kb.knowledgeBase, jdText);
+      } catch {
+        fitAssessment = null;
       }
-      const kb = await loadKnowledgeBase(tx, userId);
-      fitAssessment = computeFitAssessment(kb.knowledgeBase, jdText);
-    } catch {
-      fitAssessment = null;
     }
 
     return {

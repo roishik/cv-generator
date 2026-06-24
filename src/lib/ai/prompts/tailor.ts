@@ -27,6 +27,14 @@ Infer the role archetype from the JD and lead with what that archetype values, e
 - Leadership / senior: lead with scope, mentoring, and delivery ownership; frame advanced degrees as evidence of independent delivery.
 Per-section page budget (a guide for what to keep, NOT a layout cap — the deterministic fit ladder owns the final one-page fit): summary 3-4 lines; ~5-7 lead skills; most-recent role 4-5 bullets; previous role 2-3 bullets; older roles ~2 bullets. Spend the page on what this JD rewards.
 
+## FIT ASSESSMENT (populate the "fit" object)
+Judge how well THIS candidate matches THIS job description, honestly — inflating the score helps no one. Base it on the knowledge base (the candidate's true superset of facts), not on how the tailored CV turned out. Provide:
+- skillsMatch (0-100): how well the candidate's skills/tools cover what the JD asks for.
+- experienceMatch (0-100): how well their actual experience (domain, seniority, scope, years) covers the role.
+- strengths: 3-8 SHORT PHRASES (2-5 words each, e.g. "production ML pipelines", "led 4-person team") naming concrete, KB-backed reasons this candidate fits. Never single filler words like "high" or "part" — each phrase must be a real, defensible match the candidate could speak to in an interview.
+- gaps: 1-6 SHORT PHRASES naming real JD requirements the knowledge base does NOT support (e.g. "no Kubernetes experience", "JD wants 5+ years, KB shows 3"). Be honest; if there are genuinely no meaningful gaps, return an empty array.
+Do NOT fabricate strengths the KB cannot back. The fit object is the candidate's honest mirror, not a sales pitch.
+
 ## STYLE (apply to the summary and every bullet you write)
 - NO em-dashes. Use commas, periods, or restructure the sentence instead.
 - NO clichés, filler, or buzzwords. Never write: "passionate about", "great fit", "leverage" (my/your skills), "hit the ground running", "drive results", "synergies", "team player". Cut any generic phrase that is not backed by a concrete fact from the knowledge base.

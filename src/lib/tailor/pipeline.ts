@@ -32,7 +32,7 @@ import { stemSet } from "./keywords";
 import type { TruthfulnessReport } from "@/lib/ai/truthfulness";
 import { lintStyle, type StyleReport } from "@/lib/ai/style-lint";
 import { suggestCuts, type CutSuggestion } from "./suggest-cuts";
-import { computeFitAssessment, type FitAssessment } from "./fit-score";
+import { assembleFit, computeFitAssessment, type FitAssessment } from "./fit-score";
 import type { CvData, TemplateId } from "@/lib/schemas/cv-data";
 import type { KnowledgeBaseForLLM } from "@/lib/schemas/knowledge-base";
 import type { TailorRationaleItem } from "@/lib/schemas/llm-contracts";
@@ -123,7 +123,13 @@ export interface TailorToJobSuccess {
   };
 }
 
-export type TailorToJobResult = TailorToJobSuccess;
+export interface TailorToJobTruthfulnessBlocked {
+  ok: false;
+  blocked: "truthfulness";
+  truthfulness: TruthfulnessReport;
+}
+
+export type TailorToJobResult = TailorToJobSuccess | TailorToJobTruthfulnessBlocked;
 
 function sha256(buf: Buffer | string): string {
   return createHash("sha256").update(buf).digest("hex");
@@ -168,12 +174,6 @@ async function runInTx(
     (await loadBaselineCvData(tx, userId, knowledgeBaseId)) ??
     projectBaselineCvData(knowledgeBase);
 
-  // Deterministic JD↔CV fit estimate (finding 2.1). Measured against the KB (the
-  // candidate's true superset of facts), so it is stable across tailorings and
-  // reflects what the candidate can honestly claim. Null for instructions-only
-  // runs (no real JD to assess).
-  const fitAssessment = computeFitAssessment(knowledgeBase, jd);
-
   // 2) Deterministic template selection (explicit override wins).
   const tpl = resolveTemplate(jd, input.templateId);
   const templateId = tpl.templateId;
@@ -208,6 +208,11 @@ async function runInTx(
     // Style is a pure function of cvData and is not persisted — recompute it on
     // the cache-hit path so the warning surface is identical to a fresh run.
     const style = lintStyle(cached.cvData as CvData);
+    // Fit is the LLM's judgment, persisted on the row. Fall back to the
+    // deterministic estimate for legacy rows tailored before fit was persisted.
+    const fitAssessment =
+      (cached.fitAssessment as FitAssessment | null) ??
+      computeFitAssessment(knowledgeBase, jd);
     return {
       ok: true,
       fits: !!artifact,
@@ -312,30 +317,12 @@ async function runInTx(
       }
     }
 
-    // Truthfulness repair (both tiers) — if still failing after draft / revise pass.
-    if (hasRealJd && !tailored.truthfulness.ok) {
-      attempts += 1;
-      tailored = await tailorCv(provider, {
-        knowledgeBase,
-        jobDescription: jd,
-        templateId,
-        baselineCvData: baseline,
-        instructions: buildTruthfulnessRepairInstruction(
-          input.instructions,
-          tailored.truthfulness,
-        ),
-      });
-      collectUsage();
-    }
-
     if (!hasRealJd) {
       tailored.truthfulness = { ok: true, flags: [] };
     }
 
     if (hasRealJd && !tailored.truthfulness.ok) {
-      throw new Error(
-        "Tailoring blocked: unable to produce a truthful CV after retry. Try adjusting the JD or your profile context.",
-      );
+      return { ok: false, blocked: "truthfulness", truthfulness: tailored.truthfulness };
     }
 
     assertUsageWithinCap(
@@ -381,6 +368,15 @@ async function runInTx(
     throw e;
   }
 
+  // The LLM's holistic JD↔candidate fit judgment (replaces the old deterministic
+  // keyword-overlap estimate). Null for instructions-only runs (no real JD). Falls
+  // back to the deterministic estimate only if the model omitted the fit object.
+  const fitAssessment: FitAssessment | null = !hasRealJd
+    ? null
+    : tailored.fit
+      ? assembleFit(tailored.fit)
+      : computeFitAssessment(knowledgeBase, jd);
+
   // 6) Structured diff vs baseline (richer than the coarse pipeline diff).
   const diff = computeStructuredDiff(baseline, tailored.cvData);
 
@@ -406,6 +402,7 @@ async function runInTx(
       warnings: tailored.warnings as unknown as unknown[],
       diff: diff as unknown as Record<string, unknown>,
       truthfulness: tailored.truthfulness as unknown as Record<string, unknown>,
+      fitAssessment: fitAssessment as unknown as Record<string, unknown> | null,
       tailorCacheKey: cacheKey,
       label: `${tailored.cvData.header.name} – ${input.title ?? input.company ?? "Tailored"}`,
     })
@@ -607,24 +604,4 @@ function buildCritique(
   ];
 
   return [...header, ...parts].join("\n");
-}
-
-function buildTruthfulnessRepairInstruction(
-  existingInstruction: string | undefined,
-  report: TruthfulnessReport,
-): string {
-  const errors = report.flags
-    .filter((f) => f.severity === "error")
-    .map((f) => `- ${f.path}: ${f.message}`)
-    .slice(0, 12);
-  const retry = [
-    "RETRY MODE — STRICT TRUTHFULNESS REPAIR:",
-    "It is acceptable if the candidate does NOT fully match every JD requirement.",
-    "Do NOT force-fit missing years/skills. Prefer truthful partial-fit phrasing.",
-    "Example: if JD asks 4 years and KB supports 3, keep 3 years and position it honestly.",
-    "Keep every employer/company/period exactly as in the KB.",
-    "Fix these truthfulness errors exactly:",
-    ...errors,
-  ].join("\n");
-  return [existingInstruction?.trim() ?? "", retry].filter(Boolean).join("\n\n");
 }

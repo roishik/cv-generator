@@ -4,10 +4,11 @@
  * FitScore — surfaces the deterministic JD↔CV fit estimate (FINDINGS.md 2.1).
  *
  * Reinforces the honesty wedge: we show the candidate's real fit (skills +
- * experience keyword coverage against their knowledge base) BEFORE/with
- * tailoring, with the matched signals as strengths and the missing ones as
- * gaps. It is a keyword-overlap ESTIMATE (labelled as such), never an LLM
- * judgment, and never blocks anything.
+ * experience match against their knowledge base) BEFORE/with tailoring, with the
+ * genuine matches as strengths and the missing JD requirements as gaps. The
+ * assessment is the LLM's holistic judgment produced as part of the tailoring
+ * call (method "llm"); a deterministic keyword-overlap estimate is the fallback
+ * for legacy rows (method "keyword-overlap"). It never blocks anything.
  */
 
 import { Target } from "lucide-react";
@@ -84,7 +85,11 @@ export function FitScore({ fit }: FitScoreProps) {
         </div>
       )}
 
-      <p className="text-[10px] text-muted-foreground">Keyword-overlap estimate vs your profile.</p>
+      <p className="text-[10px] text-muted-foreground">
+        {fit.method === "llm"
+          ? "AI fit assessment vs your profile."
+          : "Keyword-overlap estimate vs your profile."}
+      </p>
     </div>
   );
 }

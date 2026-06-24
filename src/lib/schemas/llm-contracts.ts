@@ -196,6 +196,22 @@ export const TailorRationaleItem = z.object({
 export type TailorRationaleItem = z.infer<typeof TailorRationaleItem>;
 
 /**
+ * The LLM's holistic JD↔candidate fit judgment, produced as part of the tailoring
+ * call. Replaces the old deterministic keyword-overlap estimate. `strengths` and
+ * `gaps` are short human-readable PHRASES (not single tokens). The two dimension
+ * scores are 0-100; `overall` + the verdict band are derived in code (fit-score.ts)
+ * so the verdict labeling stays consistent. Null/omitted on instructions-only runs
+ * (no real JD to assess).
+ */
+export const TailorFit = z.object({
+  skillsMatch: z.number().min(0).max(100),
+  experienceMatch: z.number().min(0).max(100),
+  strengths: z.array(z.string()),
+  gaps: z.array(z.string()),
+});
+export type TailorFit = z.infer<typeof TailorFit>;
+
+/**
  * The cvData shape as returned BY THE LLM (string ids — provider structured
  * output cannot reliably emit uuid-format strings). It is normalized + hardened
  * into the canonical `CvData` (with schemaVersion, mirrored summary, defaults)
@@ -259,6 +275,8 @@ export const TailorResult = z.object({
   rationale: z.array(TailorRationaleItem),
   templateSuggestion: z.enum(["sidebar", "clean"]),
   warnings: z.array(z.string()),
+  /** Holistic fit judgment. Null/omitted for instructions-only (no-JD) runs. */
+  fit: TailorFit.nullable().optional(),
 });
 export type TailorResult = z.infer<typeof TailorResult>;
 
@@ -383,6 +401,17 @@ export const TAILOR_CV_JSON_SCHEMA = {
       },
       templateSuggestion: { type: "string", enum: ["sidebar", "clean"] },
       warnings: { type: "array", items: { type: "string" } },
+      fit: {
+        type: "object",
+        additionalProperties: false,
+        required: ["skillsMatch", "experienceMatch", "strengths", "gaps"],
+        properties: {
+          skillsMatch: { type: "integer", minimum: 0, maximum: 100 },
+          experienceMatch: { type: "integer", minimum: 0, maximum: 100 },
+          strengths: { type: "array", items: { type: "string" } },
+          gaps: { type: "array", items: { type: "string" } },
+        },
+      },
     },
   },
 } as const;

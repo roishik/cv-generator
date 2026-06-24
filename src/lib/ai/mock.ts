@@ -240,6 +240,27 @@ function mockTailor(input: TailorInput): TailorResult {
     }
   }
 
+  // Deterministic mock of the LLM's holistic fit judgment. Real providers produce
+  // this via the model; here we derive it from JD↔KB token overlap. Omitted for
+  // instructions-only runs (no real JD), mirroring the prompt's edit mode.
+  const fit =
+    jdText.trim().length < 30
+      ? undefined
+      : (() => {
+          const matched = [...jdTokens].filter((t) =>
+            [...kbVocab].some((v) => v.includes(t)),
+          );
+          const missing = [...jdTokens].filter((t) => !matched.includes(t));
+          const ratio = jdTokens.size ? matched.length / jdTokens.size : 0;
+          const skillsMatch = Math.round(ratio * 100);
+          return {
+            skillsMatch,
+            experienceMatch: Math.max(0, skillsMatch - 5),
+            strengths: matched.slice(0, 6),
+            gaps: missing.slice(0, 4),
+          };
+        })();
+
   return TailorResult.parse({
     cvData: {
       header: {
@@ -279,6 +300,7 @@ function mockTailor(input: TailorInput): TailorResult {
     rationale,
     templateSuggestion: templateId,
     warnings: warnings.slice(0, 10),
+    ...(fit ? { fit } : {}),
   });
 }
 
