@@ -233,7 +233,18 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
         ...(extraThinking ? { extraThinking: true } : {}),
       });
       if (!res.ok) {
-        toast.error(res.error);
+        if ("blocked" in res) {
+          // Truthfulness gate fired: tailoring couldn't produce a CV we can
+          // stand behind. Surface the flags for review instead of a generic
+          // error, and jump to the Changes tab where the review renders.
+          setTruthfulness(res.truthfulness);
+          setTab("changes");
+          toast.error(
+            "Couldn't produce a truthful CV for this job. Review the flagged issues, then adjust your profile or the job description and try again.",
+          );
+        } else {
+          toast.error(res.error);
+        }
         return;
       }
       setDocId(res.cvDocumentId);
@@ -887,6 +898,10 @@ export function TailorWorkspace({ initial }: { initial: TailorWorkspaceInitial }
                 <StyleReview report={styleReport} onJump={jumpPath} />
                 {diff && <TailorDiffPanel diff={diff} focusPath={focusPath} onJump={jump} />}
               </>
+            ) : truthfulness ? (
+              // A run was blocked by the truthfulness gate (no tailored doc) —
+              // still surface the flags so the user knows what to fix.
+              <TruthfulnessReview report={truthfulness} onJump={jumpPath} />
             ) : (
               <p className="text-[12px] text-muted-foreground">
                 Generate to see what changed.

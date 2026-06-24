@@ -225,6 +225,7 @@ describe("tailorToJob — full pipeline", () => {
       const res = await tailorToJob({ userId, jobDescription: TECH_JD, providerOverride: provider });
 
       expect(res.ok).toBe(true);
+      if (!res.ok) throw new Error(`expected a successful tailoring, got: ${JSON.stringify(res)}`);
       expect(res.fits).toBe(true);
       expect(res.cacheHit).toBe(false);
       expect(res.llmCalled).toBe(true);
@@ -271,6 +272,8 @@ describe("tailorToJob — full pipeline", () => {
       const provider = new CountingProvider(new MockProvider());
       const res = await tailorToJob({ userId, jobDescription: TECH_JD, providerOverride: provider });
 
+      expect(res.ok).toBe(true);
+      if (!res.ok) throw new Error(`expected a successful tailoring, got: ${JSON.stringify(res)}`);
       expect(res.cacheHit).toBe(true);
       expect(res.llmCalled).toBe(false);
       expect(provider.tailorCalls).toBe(0); // no second LLM call
