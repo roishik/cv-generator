@@ -155,7 +155,7 @@ from `app/**`, `lib/db/**`, or `lib/auth/**`.
 | M9 | Hot path A: upload → extract → KB | - |
 | M10 | Hot path B: JD → tailor → render → PDF | - |
 | M11 | Hardening: rate limits, upload safety, redaction, e2e | - |
-| M12 | Deploy prep (Dockerfile, no actual deploy) | - |
+| M12 | Deployed to Google Cloud Run (`tailor` service, project `tailor-cv-generator`, region `europe-west1`). Runbook + redeploy flow: `docs/deployment/google-cloud.md` | Done |
 
 ---
 

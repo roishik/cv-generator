@@ -73,6 +73,52 @@ gcloud run jobs create tailor-migrate \
 gcloud run jobs execute tailor-migrate --region europe-west1 --wait
 ```
 
+## Redeploy (subsequent deploys)
+
+This is the day-to-day flow after the first deploy: the Cloud Run service
+`tailor` and the `tailor-migrate` job already exist, so you only rebuild the
+image, (optionally) run migrations, and roll a new revision.
+
+Prereqs: `gcloud config set project tailor-cv-generator` and
+`gcloud config set run/region europe-west1` (or pass `--region` each call).
+Authenticated account for this project: `roishik10@gmail.com`.
+Live service URL: `https://tailor-lyxzyjhrqq-ew.a.run.app`
+(custom domain: `https://tailor.roishikler.com`).
+
+```bash
+# 1. Build + push a fresh image from the current working tree.
+#    (Use :latest, or a git-sha tag if you want pinned/rollbackable revisions.)
+gcloud builds submit \
+  --tag europe-west1-docker.pkg.dev/tailor-cv-generator/tailor/tailor:latest
+
+# 2. If this release changed the DB schema (a new file under
+#    drizzle/migrations/), run the migration job FIRST. The job re-pulls
+#    :latest, so step 1 must finish before this. Migrations here are additive
+#    + nullable, so running them while the OLD revision is still serving is
+#    safe (old code just ignores the new column).
+gcloud run jobs execute tailor-migrate --region europe-west1 --wait
+
+# 3. Roll a new service revision onto the new image. Env vars + secrets are
+#    inherited from the existing revision, so no need to re-pass them unless
+#    they changed.
+gcloud run deploy tailor \
+  --image europe-west1-docker.pkg.dev/tailor-cv-generator/tailor/tailor:latest \
+  --region europe-west1
+```
+
+**Order matters when a deploy includes a schema change:** migrate (step 2)
+*before* deploy (step 3). The app's tailor pipeline writes the new column
+(e.g. `cv_documents.fit_assessment`); deploying that code against an
+un-migrated DB makes the INSERT fail. Additive nullable columns make
+"migrate-first" safe for the still-running old revision.
+
+If you tag images per release instead of `:latest`, roll back with:
+
+```bash
+gcloud run services update-traffic tailor --region europe-west1 \
+  --to-revisions <PREVIOUS_REVISION>=100
+```
+
 ## Runtime IAM
 
 The Cloud Run runtime service account needs:
