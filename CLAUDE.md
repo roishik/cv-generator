@@ -156,6 +156,7 @@ from `app/**`, `lib/db/**`, or `lib/auth/**`.
 | M10 | Hot path B: JD → tailor → render → PDF | - |
 | M11 | Hardening: rate limits, upload safety, redaction, e2e | - |
 | M12 | Deployed to Google Cloud Run (`tailor` service, project `tailor-cv-generator`, region `europe-west1`). Runbook + redeploy flow: `docs/deployment/google-cloud.md` | Done |
+| M13 | Monetization: Polar.sh credit packs on the managed key. Plan + infra decisions (Cloud SQL stays, auth stays): `planning/04-master-plan.md` §10 | Planned (deferred) |
 
 ---
 

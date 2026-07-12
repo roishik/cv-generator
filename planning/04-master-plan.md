@@ -831,4 +831,72 @@ Exactly **one LLM call per high-value action**: extraction (once per upload, cac
 
 ## 9. Open product questions (unchanged, for the founder)
 
-Carried from `01-product-spec.md` §9 — not blocking the build, defaults assumed: Q1 trial-without-key (default: BYOK strictly required at v1; mock covers dev), Q2 pricing, Q3 Hebrew/RTL (v1.1), Q4 open-source posture, Q5 provider default (mid-tier per provider), Q6 honesty positioning. None block M1–M12.
+Carried from `01-product-spec.md` §9 — not blocking the build, defaults assumed: Q1 trial-without-key (default: BYOK strictly required at v1; mock covers dev), Q2 pricing (now answered — see §10), Q3 Hebrew/RTL (v1.1), Q4 open-source posture, Q5 provider default (mid-tier per provider), Q6 honesty positioning. None block M1–M12.
+
+---
+
+## 10. Monetization plan — M13 (Polar.sh, deferred until wanted)
+
+**Decision (July 2026, research-backed):** when monetization ships, it is **Polar.sh**
+selling **prepaid credit packs** spent against the app's managed LLM key. Deferred by
+choice — nothing below blocks current work; this section exists so the decision and its
+rationale don't have to be re-derived later.
+
+### 10.1 Why Polar.sh
+
+- **Merchant of Record** — Polar is legally the seller and handles VAT/sales tax
+  globally. As a solo Israeli dev with international users, plain Stripe would make
+  *us* the tax-liable merchant in every customer jurisdiction. Non-starter.
+- **Native LLM token metering** — Polar ingests usage directly from OpenAI/Anthropic
+  API responses and supports credit packs + subscriptions + metered billing in one
+  product. Lemon Squeezy / Paddle offer the MoR benefit but not the LLM metering;
+  Clerk Billing had no usage-based billing or tax handling as of mid-2026.
+- **Pricing:** free Starter plan, 5% + $0.50 per transaction (same take rate as the
+  other MoRs); paid tiers ($20/$100/$400 per month) buy the percentage down. Start on
+  Starter — zero fixed cost until there is revenue.
+
+### 10.2 How it maps onto the existing architecture (small delta by design)
+
+The hard parts already exist:
+
+| Already built | Where | Role in monetization |
+|---|---|---|
+| Per-call token accounting | `usage_events` (tokens, kind, status per LLM call) | The meter — source of truth for credit burn |
+| BYOK vs managed split | `billingMode` in the tailor pipeline; `resolveProvider` | "Paying user on managed key" is a third billing mode alongside `byok` / managed-free |
+| Managed-free budget caps | `TOKEN_CAP_FREE_*` env + rolling-average logic | Same enforcement point gates paid credits |
+| Per-user rate limits | `lib/ratelimit` | Unchanged; applies to paid users too |
+
+New pieces (the whole M13 scope):
+
+1. **Credit ledger** — new `credit_transactions` table (userId, delta, reason:
+   `purchase | burn | refund | grant`, polarOrderId, usageEventId, createdAt), RLS like
+   every other table. Balance = SUM(delta); never a mutable balance column.
+2. **Polar webhook route** — `app/api/webhooks/polar/route.ts`: verify signature, insert
+   a `purchase` transaction on order-paid. Idempotent on polarOrderId.
+3. **Burn hook** — after each managed-key LLM call, convert `usage_events` tokens →
+   credits (fixed credits-per-1k-tokens rate per provider tier) and insert a `burn` row
+   in the same transaction as the usage event.
+4. **Gate** — in the managed-key path of `resolveProvider` / tailor action: balance ≤ 0
+   → structured "buy credits" error to the UI. BYOK users bypass entirely (unchanged).
+5. **UI** — settings: balance + "buy credits" (Polar hosted checkout link); tailor
+   workspace: credit-cost estimate next to the existing token budget indicator.
+6. **Pricing** — launch with one pack (e.g. $5 ≈ 50 tailorings on mid-tier models);
+   tune with real usage data from `usage_events`, which already records exact costs.
+
+Non-negotiables carry over: budgeted reasoning unchanged (credits change *who pays*,
+never *how many calls*), keys never logged, every boundary (webhook body included)
+Zod-validated.
+
+### 10.3 Infra decisions recorded alongside (July 2026)
+
+- **Database: stay on Cloud SQL** (`tailor-db`). We do NOT use Neon. Revisit only if
+  the ~always-on Cloud SQL cost bothers us at low traffic — Neon (scale-to-zero
+  Postgres) is the researched escape hatch and is a connection-string swap since
+  Drizzle + RLS are plain Postgres. Not needed for monetization.
+- **Auth: no change.** Auth.js v5 + Google OAuth with basic scopes (`openid email
+  profile`) requires **no Google app verification** — the consent-screen production
+  toggle is already done. Managed-auth providers (WorkOS/Clerk/Supabase) would not
+  remove any production step. Revisit only if we want passkeys/magic links or hosted
+  login UI; researched pick then: WorkOS AuthKit (free to 1M MAU).
+- **Hosting: Cloud Run stays** — Playwright/Chromium needs the container runtime;
+  no platform researched improves on it.
