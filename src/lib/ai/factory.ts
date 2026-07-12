@@ -52,6 +52,7 @@ export function createProvider(input: CreateProviderInput): LLMProvider {
       return new DeepSeekProvider({
         apiKey: requireKey(input),
         ...(input.model ? { model: input.model } : {}),
+        ...(input.reasoning ? { reasoning: input.reasoning } : {}),
       });
     default: {
       const _exhaustive: never = input.provider;

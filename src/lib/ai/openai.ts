@@ -11,7 +11,11 @@ import type {
   ValidateKeyResult,
   ReasoningOptions,
 } from "./provider";
-import { DEFAULT_MODELS, FLAGSHIP_MODELS } from "./provider";
+import {
+  DEFAULT_MODELS,
+  FLAGSHIP_MODELS,
+  OPENAI_REASONING_EFFORT,
+} from "./provider";
 import {
   ExtractionResult,
   TailorResult,
@@ -39,12 +43,16 @@ export class OpenAIProvider implements LLMProvider {
   readonly id = "openai" as const;
   private readonly client: OpenAI;
   private readonly model: string;
+  private readonly reasoningEffort: "medium" | "xhigh";
   private lastUsage: TokenUsage | null = null;
 
   constructor(opts: OpenAIOptions) {
     this.client = new OpenAI({ apiKey: opts.apiKey });
-    const isExtended = opts.reasoning?.tier === "extended";
-    this.model = opts.model ?? (isExtended ? FLAGSHIP_MODELS.openai : DEFAULT_MODELS.openai);
+    const tier = opts.reasoning?.tier ?? "standard";
+    this.model =
+      opts.model ??
+      (tier === "extended" ? FLAGSHIP_MODELS.openai : DEFAULT_MODELS.openai);
+    this.reasoningEffort = OPENAI_REASONING_EFFORT[tier];
   }
 
   async validateKey(): Promise<ValidateKeyResult> {
@@ -63,6 +71,7 @@ export class OpenAIProvider implements LLMProvider {
   ): Promise<string> {
     const res = await this.client.chat.completions.create({
       model: this.model,
+      reasoning_effort: this.reasoningEffort,
       messages: [
         { role: "system", content: system },
         { role: "user", content: userPrompt },

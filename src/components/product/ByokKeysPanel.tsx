@@ -35,13 +35,14 @@ const PROVIDERS = [
     id: "google",
     label: "Google",
     hint: "Begins with AIza…",
-    models: ["gemini-3.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
+    models: ["gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash"],
   },
   {
     id: "deepseek",
     label: "DeepSeek",
     hint: "Begins with sk-…",
-    models: ["deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"],
+    // deepseek-chat / deepseek-reasoner retire Jul 2026 (route to v4-flash).
+    models: ["deepseek-v4-pro", "deepseek-v4-flash"],
   },
 ] as const;
 

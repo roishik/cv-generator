@@ -10,6 +10,7 @@ import type {
   TokenUsage,
   TailorInput,
   ValidateKeyResult,
+  ReasoningOptions,
 } from "./provider";
 import { DEFAULT_MODELS } from "./provider";
 import {
@@ -34,6 +35,7 @@ const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 export interface DeepSeekOptions {
   apiKey: string;
   model?: string;
+  reasoning?: ReasoningOptions;
   /** Override the base URL (useful for testing). */
   baseURL?: string;
 }
@@ -42,6 +44,10 @@ export class DeepSeekProvider implements LLMProvider {
   readonly id = "deepseek" as const;
   private readonly client: OpenAI;
   private readonly model: string;
+  /** V4 models accept OpenAI-style reasoning_effort ("xhigh" = max reasoning).
+   *  Only sent on the extended tier so older/legacy model overrides that
+   *  don't know the param keep working on the standard path. */
+  private readonly reasoningEffort: "xhigh" | undefined;
   private lastUsage: TokenUsage | null = null;
 
   constructor(opts: DeepSeekOptions) {
@@ -50,6 +56,8 @@ export class DeepSeekProvider implements LLMProvider {
       baseURL: opts.baseURL ?? DEEPSEEK_BASE_URL,
     });
     this.model = opts.model ?? DEFAULT_MODELS.deepseek;
+    this.reasoningEffort =
+      opts.reasoning?.tier === "extended" ? "xhigh" : undefined;
   }
 
   async validateKey(): Promise<ValidateKeyResult> {
@@ -73,6 +81,7 @@ export class DeepSeekProvider implements LLMProvider {
   ): Promise<string> {
     const res = await this.client.chat.completions.create({
       model: this.model,
+      ...(this.reasoningEffort ? { reasoning_effort: this.reasoningEffort } : {}),
       messages: [
         { role: "system", content: system },
         { role: "user", content: userPrompt },

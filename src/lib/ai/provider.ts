@@ -93,17 +93,28 @@ export interface ReasoningOptions {
   tier: ReasoningTier;
 }
 
-/** Flagship models used by the extended tier (env vars override these defaults). */
+/** Flagship models used by the extended tier (env vars override these defaults).
+ *  google: 3.5-pro is not publicly GA yet (July 2026); 3.1-pro-preview is the
+ *  strongest public Gemini. Bump via GOOGLE_EXTENDED_MODEL when it lands. */
 export const FLAGSHIP_MODELS = {
   anthropic: "claude-opus-4-8",
   openai: "gpt-5.5-2026-04-23",
-  google: "gemini-2.5-pro",
+  google: "gemini-3.1-pro-preview",
 } as const;
 
-/** Anthropic `output_config.effort` per tier. */
-export const ANTHROPIC_EFFORT: Record<ReasoningTier, "medium" | "high"> = {
+/** Anthropic `output_config.effort` per tier. `xhigh` is the recommended
+ *  setting for the hardest reasoning tasks on Opus 4.7+ (`high` is the API
+ *  default, so it added nothing over an untiered call). */
+export const ANTHROPIC_EFFORT: Record<ReasoningTier, "medium" | "xhigh"> = {
   standard: "medium",
-  extended: "high",
+  extended: "xhigh",
+};
+
+/** OpenAI `reasoning_effort` per tier (gpt-5.x; `medium` is the API default,
+ *  `xhigh` maps to max reasoning). */
+export const OPENAI_REASONING_EFFORT: Record<ReasoningTier, "medium" | "xhigh"> = {
+  standard: "medium",
+  extended: "xhigh",
 };
 
 /** Anthropic `max_tokens` per tier. Standard 16 k covers most tailorings with
@@ -113,7 +124,15 @@ export const ANTHROPIC_MAX_TOKENS: Record<ReasoningTier, number> = {
   extended: 32000,
 };
 
-/** Gemini `thinkingBudget` tokens per tier. */
+/** Gemini 3.x `thinkingLevel` per tier (string values of the SDK's
+ *  ThinkingLevel enum). 3.x models reject the legacy `thinkingBudget`. */
+export const GOOGLE_THINKING_LEVEL: Record<ReasoningTier, "MEDIUM" | "HIGH"> = {
+  standard: "MEDIUM",
+  extended: "HIGH",
+};
+
+/** Legacy Gemini 2.x `thinkingBudget` tokens per tier (2.x models only,
+ *  e.g. the transient-overload fallback or a 2.x env/BYOK override). */
 export const GOOGLE_THINKING_BUDGET: Record<ReasoningTier, number> = {
   standard: 8000,
   extended: 24000,

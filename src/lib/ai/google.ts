@@ -11,10 +11,12 @@ import type {
   ValidateKeyResult,
   ReasoningOptions,
 } from "./provider";
+import type { ReasoningTier } from "./provider";
 import {
   DEFAULT_MODELS,
   FLAGSHIP_MODELS,
   GOOGLE_THINKING_BUDGET,
+  GOOGLE_THINKING_LEVEL,
 } from "./provider";
 import { env } from "@/env";
 import {
@@ -43,7 +45,7 @@ export class GoogleProvider implements LLMProvider {
   readonly id = "google" as const;
   private readonly client: GoogleGenAI;
   private readonly model: string;
-  private readonly thinkingBudget: number;
+  private readonly tier: ReasoningTier;
   private lastModelUsed: string;
   private lastUsage: TokenUsage | null = null;
 
@@ -55,7 +57,7 @@ export class GoogleProvider implements LLMProvider {
         ? (env.GOOGLE_EXTENDED_MODEL ?? FLAGSHIP_MODELS.google)
         : DEFAULT_MODELS.google;
     this.model = opts.model ?? defaultModel;
-    this.thinkingBudget = GOOGLE_THINKING_BUDGET[tier];
+    this.tier = tier;
     this.lastModelUsed = this.model;
   }
 
@@ -174,6 +176,12 @@ export class GoogleProvider implements LLMProvider {
     userPrompt: string,
     model: string,
   ) {
+    // Gemini 3.x takes the thinkingLevel enum; 2.x models (incl. the overload
+    // fallback) still take the legacy thinkingBudget token count. Mixing the
+    // two, or sending thinkingBudget to a 3.x model, is a 400.
+    const thinkingConfig = model.startsWith("gemini-2")
+      ? { thinkingBudget: GOOGLE_THINKING_BUDGET[this.tier] }
+      : { thinkingLevel: GOOGLE_THINKING_LEVEL[this.tier] };
     return this.client.models.generateContent({
       model,
       contents: userPrompt,
@@ -182,8 +190,7 @@ export class GoogleProvider implements LLMProvider {
         responseMimeType: "application/json",
         // Our JSON Schema is structurally compatible with Gemini's responseSchema.
         responseSchema: schema.schema as never,
-        // Adaptive thinking: budget scales with the reasoning tier.
-        thinkingConfig: { thinkingBudget: this.thinkingBudget } as never,
+        thinkingConfig: thinkingConfig as never,
       },
     });
   }

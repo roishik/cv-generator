@@ -47,7 +47,7 @@ export class AnthropicProvider implements LLMProvider {
   private readonly client: Anthropic;
   private readonly model: string;
   private readonly maxTokens: number;
-  private readonly effort: "medium" | "high";
+  private readonly effort: "medium" | "xhigh";
   private lastUsage: TokenUsage | null = null;
 
   constructor(opts: AnthropicOptions) {
